@@ -1,7 +1,6 @@
 # 01 — Project Scaffold
 
-**State:** `todo`
-> When complete: set State to `done`, fill in the Notes section below, and remove this line.
+**State:** `done`
 
 **Depends on:** nothing
 **Blocks:** all other tickets
@@ -14,14 +13,14 @@ Set up the Go module, install all dependencies, and create the empty file struct
 
 ## Tasks
 
-- [ ] Run `go mod init github.com/yourname/wtpad`
-- [ ] Add dependencies:
+- [x] Run `go mod init github.com/bvalentino/wtpad`
+- [x] Add dependencies:
   ```bash
   go get github.com/charmbracelet/bubbletea
   go get github.com/charmbracelet/lipgloss
   go get github.com/charmbracelet/bubbles
   ```
-- [ ] Create empty files matching the structure in `docs/architecture.md`:
+- [x] Create empty files matching the structure in `docs/architecture.md`:
   - `main.go` (package main, empty main func)
   - `internal/model/model.go`
   - `internal/store/store.go`
@@ -32,7 +31,7 @@ Set up the Go module, install all dependencies, and create the empty file struct
   - `internal/tui/help.go`
   - `internal/tui/statusbar.go`
   - `internal/tui/styles.go`
-- [ ] Confirm `go build ./...` passes with no errors
+- [x] Confirm `go build ./...` passes with no errors
 
 ## Acceptance
 
@@ -40,4 +39,8 @@ Set up the Go module, install all dependencies, and create the empty file struct
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+- Module initialized as `github.com/bvalentino/wtpad`
+- Dependencies installed: bubbletea v1.3.10, lipgloss v1.1.0, bubbles v1.0.0
+- Skipped `go mod tidy` to preserve deps in go.mod before they're imported
+- All 10 source files created with package declarations only
+- `go build ./...` passes cleanly
