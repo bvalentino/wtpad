@@ -1,7 +1,6 @@
 # 02 — Data Models
 
-**State:** `todo`
-> When complete: set State to `done`, fill in the Notes section below, and remove this line.
+**State:** `done`
 
 **Depends on:** `01-scaffold.md`
 **Blocks:** `03-store.md`, all TUI tickets
@@ -14,7 +13,7 @@ Define the `Todo` and `Note` structs in `internal/model/model.go`. This is the s
 
 ## Tasks
 
-- [ ] Define `Todo` struct:
+- [x] Define `Todo` struct:
   ```go
   type Todo struct {
       Text string
@@ -22,7 +21,7 @@ Define the `Todo` and `Note` structs in `internal/model/model.go`. This is the s
   }
   ```
   Todos are parsed from / serialized to GFM task list lines (`- [ ] Text` / `- [x] Text`). No IDs needed — position in the file is the identity.
-- [ ] Define `Note` struct:
+- [x] Define `Note` struct:
   ```go
   type Note struct {
       Name      string    // filename without .md extension (e.g., "20260228-143022")
@@ -31,8 +30,8 @@ Define the `Todo` and `Note` structs in `internal/model/model.go`. This is the s
   }
   ```
   Each note maps to a single `.md` file in `.wtpad/`.
-- [ ] Remove the `Data` root container — there is no single JSON blob anymore. The store returns `[]Todo` and `[]Note` separately.
-- [ ] Confirm `go build ./...` still passes
+- [x] Remove the `Data` root container — there is no single JSON blob anymore. The store returns `[]Todo` and `[]Note` separately.
+- [x] Confirm `go build ./...` still passes
 
 ## Acceptance
 
@@ -40,4 +39,6 @@ Other packages can import `internal/model` and use `Todo` and `Note` without err
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+- Scaffold had only a bare `package model` declaration — no `Data` container existed to remove
+- Both structs defined with fields matching the spec exactly
+- `go build ./...` passes cleanly
