@@ -3,13 +3,24 @@ package tui
 import (
 	"log"
 	"strings"
+	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/bvalentino/wtpad/internal/model"
 	"github.com/bvalentino/wtpad/internal/store"
 )
+
+// clearStatusMsg clears the transient status message after a delay.
+type clearStatusMsg struct{}
+
+func clearStatusAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return clearStatusMsg{}
+	})
+}
 
 // Mode transition messages — handled by root App to set appMode.
 type enterInputMsg struct{}
@@ -26,6 +37,7 @@ type todosModel struct {
 	inputActive  bool
 	input        textinput.Model
 	editIndex    int // -1 = adding new, >= 0 = editing existing
+	statusMsg    string
 }
 
 func newTodos(todos []model.Todo, s *store.Store) todosModel {
@@ -56,6 +68,10 @@ func (m todosModel) SetFocus(focused bool) todosModel {
 }
 
 func (m todosModel) Update(msg tea.Msg) (todosModel, tea.Cmd) {
+	if _, ok := msg.(clearStatusMsg); ok {
+		m.statusMsg = ""
+		return m, nil
+	}
 	if m.inputActive {
 		return m.updateInput(msg)
 	}
@@ -93,6 +109,15 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		m = m.deleteCurrent()
 	case "D":
 		m = m.purgeDone()
+	case "c":
+		if len(m.todos) > 0 {
+			if err := clipboard.WriteAll(m.todos[m.cursor].Text); err != nil {
+				m.statusMsg = "Copy failed"
+			} else {
+				m.statusMsg = "Copied!"
+			}
+			return m, clearStatusAfter(2 * time.Second)
+		}
 	}
 
 	return m, nil
@@ -437,6 +462,11 @@ func (m todosModel) Init() tea.Cmd {
 // Focused returns whether the pane is focused (used by lipgloss rendering).
 func (m todosModel) Focused() bool {
 	return m.focused
+}
+
+// StatusMsg returns the current transient status message (empty if none).
+func (m todosModel) StatusMsg() string {
+	return m.statusMsg
 }
 
 // Counts returns the number of open and done todos.

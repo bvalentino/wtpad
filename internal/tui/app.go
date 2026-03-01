@@ -341,6 +341,10 @@ func (a App) renderFooter() string {
 	open, done := a.todosPane.Counts()
 	counts := fmt.Sprintf("%d open · %d done", open, done)
 
+	if msg := a.todosPane.StatusMsg(); msg != "" {
+		return footerStyle.Render(counts + " · " + msg)
+	}
+
 	var hint string
 	switch a.mode {
 	case modeInput:

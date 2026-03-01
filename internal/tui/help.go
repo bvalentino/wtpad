@@ -45,6 +45,7 @@ func (h helpModel) View() string {
 			{"Enter", "Edit selected"},
 			{"x", "Delete selected"},
 			{"D", "Delete all completed"},
+			{"c", "Copy selected"},
 		}},
 		{"Notes", []struct{ key, desc string }{
 			{"j / k", "Navigate"},

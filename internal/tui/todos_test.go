@@ -3,6 +3,7 @@ package tui
 import (
 	"testing"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/bvalentino/wtpad/internal/model"
@@ -59,6 +60,77 @@ func TestTodosScrollDownWithDone(t *testing.T) {
 	}
 	if m.scrollOffset == 0 {
 		t.Errorf("scrollOffset should have advanced for cursor=3 with hint/divider in height=8, got %d", m.scrollOffset)
+	}
+}
+
+func TestTodosCopyYank(t *testing.T) {
+	if clipboard.Unsupported {
+		t.Skip("clipboard not available in this environment")
+	}
+
+	todos := []model.Todo{
+		{Text: "first todo"},
+		{Text: "second todo"},
+	}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 10)
+	m = m.SetFocus(true)
+
+	// Yank the first todo
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+
+	if m.statusMsg != "Copied!" {
+		t.Errorf("statusMsg = %q, want %q", m.statusMsg, "Copied!")
+	}
+	if cmd == nil {
+		t.Fatal("expected a tick command for clearing status message")
+	}
+
+	got, err := clipboard.ReadAll()
+	if err != nil {
+		t.Fatalf("clipboard.ReadAll: %v", err)
+	}
+	if got != "first todo" {
+		t.Errorf("clipboard = %q, want %q", got, "first todo")
+	}
+
+	// Move to second todo and yank
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+
+	got, _ = clipboard.ReadAll()
+	if got != "second todo" {
+		t.Errorf("clipboard = %q, want %q", got, "second todo")
+	}
+}
+
+func TestTodosCopyEmptyList(t *testing.T) {
+	m := newTodos(nil, nil)
+	m = m.SetSize(40, 10)
+	m = m.SetFocus(true)
+
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+
+	if m.statusMsg != "" {
+		t.Errorf("statusMsg = %q, want empty for empty list", m.statusMsg)
+	}
+	if cmd != nil {
+		t.Error("expected no command for yank on empty list")
+	}
+}
+
+func TestTodosClearStatusMsg(t *testing.T) {
+	todos := []model.Todo{{Text: "a todo"}}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 10)
+	m.statusMsg = "Copied!"
+
+	m, _ = m.Update(clearStatusMsg{})
+
+	if m.statusMsg != "" {
+		t.Errorf("statusMsg = %q, want empty after clearStatusMsg", m.statusMsg)
 	}
 }
 
