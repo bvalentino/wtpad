@@ -50,4 +50,9 @@ var (
 	editorConfirm = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")).
 			Bold(true)
+
+	// Status bar style
+	statusBarStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("236")).
+			Foreground(lipgloss.Color("252"))
 )

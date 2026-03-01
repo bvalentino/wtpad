@@ -299,3 +299,78 @@ func TestReservedNameTodos(t *testing.T) {
 		t.Errorf("expected 'reserved filename' error, got %v", err)
 	}
 }
+
+func TestAutoExcludeOnFirstWrite(t *testing.T) {
+	dir := t.TempDir()
+	// Set up a fake .git/info/ directory
+	gitInfo := filepath.Join(dir, ".git", "info")
+	os.MkdirAll(gitInfo, 0o755)
+	os.WriteFile(filepath.Join(gitInfo, "exclude"), []byte("# ignore\n*.tmp\n"), 0o644)
+
+	s, _ := New(dir)
+	if err := s.SaveTodos([]model.Todo{{Text: "test"}}); err != nil {
+		t.Fatalf("SaveTodos: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(gitInfo, "exclude"))
+	if err != nil {
+		t.Fatalf("ReadFile exclude: %v", err)
+	}
+
+	if !strings.Contains(string(data), ".wtpad/") {
+		t.Error("expected .wtpad/ in exclude file after first write")
+	}
+}
+
+func TestAutoExcludeIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	gitInfo := filepath.Join(dir, ".git", "info")
+	os.MkdirAll(gitInfo, 0o755)
+	os.WriteFile(filepath.Join(gitInfo, "exclude"), []byte(".wtpad/\n"), 0o644)
+
+	s, _ := New(dir)
+	if err := s.SaveTodos([]model.Todo{{Text: "test"}}); err != nil {
+		t.Fatalf("SaveTodos: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(gitInfo, "exclude"))
+	if strings.Count(string(data), ".wtpad/") != 1 {
+		t.Errorf("expected exactly one .wtpad/ entry, got:\n%s", data)
+	}
+}
+
+func TestAutoExcludeLinkedWorktree(t *testing.T) {
+	// Set up a fake main repo
+	mainDir := t.TempDir()
+	mainGitDir := filepath.Join(mainDir, ".git")
+	os.MkdirAll(filepath.Join(mainGitDir, "info"), 0o755)
+	os.MkdirAll(filepath.Join(mainGitDir, "worktrees", "wt1"), 0o755)
+	os.WriteFile(filepath.Join(mainGitDir, "info", "exclude"), []byte("# exclude\n"), 0o644)
+
+	// Set up linked worktree directory with .git file
+	wtDir := t.TempDir()
+	gitdirPath := filepath.Join(mainGitDir, "worktrees", "wt1")
+	os.WriteFile(filepath.Join(wtDir, ".git"),
+		[]byte("gitdir: "+gitdirPath+"\n"), 0o644)
+
+	s, _ := New(wtDir)
+	if err := s.SaveTodos([]model.Todo{{Text: "test"}}); err != nil {
+		t.Fatalf("SaveTodos: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(mainGitDir, "info", "exclude"))
+	if err != nil {
+		t.Fatalf("ReadFile exclude: %v", err)
+	}
+	if !strings.Contains(string(data), ".wtpad/") {
+		t.Error("expected .wtpad/ in exclude file for linked worktree")
+	}
+}
+
+func TestAutoExcludeNoGitDir(t *testing.T) {
+	// No .git/ directory — should silently skip without error
+	s := tempStore(t)
+	if err := s.SaveTodos([]model.Todo{{Text: "test"}}); err != nil {
+		t.Fatalf("SaveTodos should not fail in non-git dir: %v", err)
+	}
+}

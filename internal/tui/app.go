@@ -29,6 +29,9 @@ const (
 	modeHelp
 )
 
+// statusBarHeight is the number of terminal rows reserved for the status bar.
+const statusBarHeight = 1
+
 type App struct {
 	store      *store.Store
 	width      int
@@ -40,11 +43,16 @@ type App struct {
 	todosPane  todosModel
 	notesPane  notesModel
 	editorPane editorModel
+	statusBar  statusBarModel
 }
 
-func New(s *store.Store, todos []model.Todo, notes []model.Note) App {
+func New(s *store.Store, todos []model.Todo, notes []model.Note, dir, branch string) App {
 	tp := newTodos(todos, s)
 	np := newNotes(notes, s)
+	sb := newStatusBar(dir, branch)
+	open, done := tp.Counts()
+	sb.openCount = open
+	sb.doneCount = done
 	return App{
 		store:      s,
 		focus:      focusTodos,
@@ -52,6 +60,7 @@ func New(s *store.Store, todos []model.Todo, notes []model.Note) App {
 		todosPane:  tp,
 		notesPane:  np,
 		editorPane: newEditorModel(s),
+		statusBar:  sb,
 	}
 }
 
@@ -63,14 +72,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case enterInputMsg:
 		a.mode = modeInput
+		a = a.refreshStatusBar()
 		return a, nil
 	case exitInputMsg:
 		a.mode = modeNormal
+		a = a.refreshStatusBar()
 		return a, nil
 	case enterEditorMsg:
 		m := msg.(enterEditorMsg)
 		a.editorPane = a.editorPane.openEditor(m.name, m.body, a.width, a.height)
 		a.mode = modeEditor
+		a = a.refreshStatusBar()
 		return a, nil
 	case saveNoteMsg:
 		notes, err := a.store.ListNotes()
@@ -80,9 +92,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.notesPane = a.notesPane.SetNotes(notes)
 		}
 		a.mode = modeNormal
+		a = a.refreshStatusBar()
 		return a, nil
 	case exitEditorMsg:
 		a.mode = modeNormal
+		a = a.refreshStatusBar()
 		return a, nil
 	}
 
@@ -130,6 +144,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case focusNotes:
 		a.notesPane, cmd = a.notesPane.Update(msg)
 	}
+	a = a.refreshStatusBar()
 	return a, cmd
 }
 
@@ -137,6 +152,8 @@ func (a App) View() string {
 	if a.mode == modeEditor {
 		return a.editorPane.View()
 	}
+
+	paneHeight := a.height - borderSize - statusBarHeight
 
 	todosStyle := unfocusedBorder
 	notesStyle := unfocusedBorder
@@ -148,23 +165,44 @@ func (a App) View() string {
 
 	todosView := todosStyle.
 		Width(a.todosWidth - borderSize).
-		Height(a.height - borderSize).
+		Height(paneHeight).
 		Render(a.todosPane.View())
 
 	notesView := notesStyle.
 		Width(a.notesWidth - borderSize).
-		Height(a.height - borderSize).
+		Height(paneHeight).
 		Render(a.notesPane.View())
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, todosView, notesView)
+	panes := lipgloss.JoinHorizontal(lipgloss.Top, todosView, notesView)
+
+	return lipgloss.JoinVertical(lipgloss.Left, panes, a.statusBar.View(a.width))
 }
 
 func (a App) layoutPanes() App {
 	a.todosWidth = a.width * 2 / 5
 	a.notesWidth = a.width - a.todosWidth
 
-	a.todosPane = a.todosPane.SetSize(a.todosWidth-borderSize, a.height-borderSize)
-	a.notesPane = a.notesPane.SetSize(a.notesWidth-borderSize, a.height-borderSize)
+	paneHeight := a.height - borderSize - statusBarHeight
+	a.todosPane = a.todosPane.SetSize(a.todosWidth-borderSize, paneHeight)
+	a.notesPane = a.notesPane.SetSize(a.notesWidth-borderSize, paneHeight)
+	return a
+}
+
+func (a App) refreshStatusBar() App {
+	open, done := a.todosPane.Counts()
+	a.statusBar.openCount = open
+	a.statusBar.doneCount = done
+
+	switch a.mode {
+	case modeNormal:
+		a.statusBar.hint = "? help · tab switch"
+	case modeInput:
+		a.statusBar.hint = "enter confirm · esc cancel"
+	case modeEditor:
+		a.statusBar.hint = "ctrl+s save · esc discard"
+	case modeHelp:
+		a.statusBar.hint = "esc close"
+	}
 	return a
 }
 

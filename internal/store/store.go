@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	gitutil "github.com/bvalentino/wtpad/internal/git"
 	"github.com/bvalentino/wtpad/internal/model"
 )
 
@@ -36,8 +37,60 @@ func (s *Store) Dir() string {
 }
 
 // ensureDir creates the .wtpad/ directory if it doesn't exist.
+// On first creation, it adds .wtpad/ to .git/info/exclude.
 func (s *Store) ensureDir() error {
-	return os.MkdirAll(s.basePath, 0o755)
+	_, statErr := os.Stat(s.basePath)
+	created := os.IsNotExist(statErr)
+
+	if err := os.MkdirAll(s.basePath, 0o755); err != nil {
+		return err
+	}
+
+	if created {
+		s.autoExclude()
+	}
+	return nil
+}
+
+// autoExclude appends .wtpad/ to .git/info/exclude if not already present.
+// Silently skips if not in a git repo or on any error.
+func (s *Store) autoExclude() {
+	gitDir := gitutil.FindGitDir(filepath.Dir(s.basePath))
+	if gitDir == "" {
+		return
+	}
+	s.appendExclude(filepath.Join(gitDir, "info", "exclude"))
+}
+
+func (s *Store) appendExclude(excludePath string) {
+	// Ensure the info/ directory exists
+	if err := os.MkdirAll(filepath.Dir(excludePath), 0o755); err != nil {
+		return
+	}
+
+	data, err := os.ReadFile(excludePath)
+	if err != nil && !os.IsNotExist(err) {
+		return
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == ".wtpad/" {
+			return // already excluded
+		}
+	}
+
+	f, err := os.OpenFile(excludePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	// Add newline before entry if file doesn't end with one
+	prefix := ""
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		prefix = "\n"
+	}
+	fmt.Fprintf(f, "%s.wtpad/\n", prefix)
 }
 
 // validNoteName checks that name does not escape basePath or collide with reserved files.

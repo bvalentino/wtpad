@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	gitutil "github.com/bvalentino/wtpad/internal/git"
 	"github.com/bvalentino/wtpad/internal/model"
 	"github.com/bvalentino/wtpad/internal/store"
 	"github.com/bvalentino/wtpad/internal/tui"
@@ -174,7 +176,15 @@ func runTUI(s *store.Store) {
 		os.Exit(1)
 	}
 
-	app := tui.New(s, todos, notes)
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	dir := filepath.Base(cwd)
+	branch := gitutil.DetectBranch(".")
+
+	app := tui.New(s, todos, notes, dir, branch)
 	if _, err := tea.NewProgram(app, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

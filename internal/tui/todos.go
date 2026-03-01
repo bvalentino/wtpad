@@ -313,3 +313,15 @@ func (m todosModel) Init() tea.Cmd {
 func (m todosModel) Focused() bool {
 	return m.focused
 }
+
+// Counts returns the number of open and done todos.
+func (m todosModel) Counts() (open, done int) {
+	for _, t := range m.todos {
+		if t.Done {
+			done++
+		} else {
+			open++
+		}
+	}
+	return open, done
+}
