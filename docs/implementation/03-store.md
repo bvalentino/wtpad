@@ -1,7 +1,6 @@
 # 03 — Store (Persistence Layer)
 
-**State:** `todo`
-> When complete: set State to `done`, fill in the Notes section below, and remove this line.
+**State:** `done`
 
 **Depends on:** `02-models.md`
 **Blocks:** `04-cli.md`, `05-tui-root.md`
@@ -63,4 +62,6 @@ Implement `internal/store/store.go` — the single place responsible for reading
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+- `SaveNote` returns `(string, error)` instead of just `error` so callers can retrieve the auto-generated timestamp name.
+- `parseTodoLine` is strict: only matches `- [ ] ` and `- [x] ` prefixes (with trailing space). Other lines are silently skipped.
+- `ListNotes` reads file bodies eagerly. For large note counts this could be changed to read only names, but for the expected scale it's fine.
