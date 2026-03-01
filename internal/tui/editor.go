@@ -58,7 +58,11 @@ func (e editorModel) resize(w, h int) editorModel {
 	e.width = w
 	e.height = h
 	e.textarea.SetWidth(w)
-	e.textarea.SetHeight(h - 1) // minus header line
+	taHeight := h - 1 // minus header line
+	if taHeight < 1 {
+		taHeight = 1
+	}
+	e.textarea.SetHeight(taHeight)
 	return e
 }
 

@@ -36,13 +36,6 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("62"))
 
-	editorFooter = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245"))
-
-	editorConfirm = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
-			Bold(true)
-
 	// Help overlay styles
 	helpTitle = lipgloss.NewStyle().
 			Bold(true).
