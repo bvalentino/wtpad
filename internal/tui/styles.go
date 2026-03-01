@@ -51,6 +51,21 @@ var (
 			Foreground(lipgloss.Color("196")).
 			Bold(true)
 
+	// Help overlay styles
+	helpTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("62"))
+
+	helpSection = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("62"))
+
+	helpKey = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252"))
+
+	helpDesc = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245"))
+
 	// Status bar style
 	statusBarStyle = lipgloss.NewStyle().
 			Background(lipgloss.Color("236")).

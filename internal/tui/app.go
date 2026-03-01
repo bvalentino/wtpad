@@ -43,6 +43,7 @@ type App struct {
 	todosPane  todosModel
 	notesPane  notesModel
 	editorPane editorModel
+	helpPane   helpModel
 	statusBar  statusBarModel
 }
 
@@ -98,6 +99,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.mode = modeNormal
 		a = a.refreshStatusBar()
 		return a, nil
+	case exitHelpMsg:
+		a.mode = modeNormal
+		a = a.refreshStatusBar()
+		return a, nil
 	}
 
 	switch msg := msg.(type) {
@@ -109,6 +114,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			a.editorPane, cmd = a.editorPane.Update(msg)
 			return a, cmd
+		}
+		if a.mode == modeHelp {
+			a.helpPane.width = msg.Width
+			a.helpPane.height = msg.Height
 		}
 		return a, nil
 
@@ -123,10 +132,23 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "tab":
 				a = a.toggleFocus()
 				return a, nil
+			case "?":
+				a.helpPane.width = a.width
+				a.helpPane.height = a.height
+				a.mode = modeHelp
+				a = a.refreshStatusBar()
+				return a, nil
 			case "q":
 				return a, tea.Quit
 			}
 		}
+	}
+
+	// Delegate to help overlay when in help mode
+	if a.mode == modeHelp {
+		var cmd tea.Cmd
+		a.helpPane, cmd = a.helpPane.Update(msg)
+		return a, cmd
 	}
 
 	// Delegate to editor when in editor mode
@@ -149,6 +171,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) View() string {
+	if a.mode == modeHelp {
+		return a.helpPane.View()
+	}
 	if a.mode == modeEditor {
 		return a.editorPane.View()
 	}

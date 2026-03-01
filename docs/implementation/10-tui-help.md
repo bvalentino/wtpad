@@ -1,7 +1,6 @@
 # 10 — Help Overlay
 
-**State:** `todo`
-> When complete: set State to `done`, fill in the Notes section below, and remove this line.
+**State:** `done`
 
 **Depends on:** `05-tui-root.md`, `08-tui-editor.md` (overlay pattern reference)
 **Blocks:** nothing
@@ -14,15 +13,15 @@ Implement the help overlay in `internal/tui/help.go`. Pressing `?` from any norm
 
 ## Tasks
 
-- [ ] The overlay is rendered by the root model when `mode == modeHelp`
-- [ ] It covers the full terminal (same pattern as `editor.go`)
-- [ ] Display a structured keybinding table, grouped by context:
+- [x] The overlay is rendered by the root model when `mode == modeHelp`
+- [x] It covers the full terminal (same pattern as `editor.go`)
+- [x] Display a structured keybinding table, grouped by context:
   - Global
   - Todo pane
   - Notes pane
   - Note editor
-- [ ] Any keypress while in `modeHelp` → switch back to `modeNormal`
-- [ ] Style the overlay with a clear visual distinction from the main UI (border, background, centered title)
+- [x] Any keypress while in `modeHelp` → switch back to `modeNormal`
+- [x] Style the overlay with a clear visual distinction from the main UI (border, background, centered title)
 
 ## Content
 
@@ -61,4 +60,8 @@ Editor
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+- `helpModel` in `help.go` with `Update()` (any key → `exitHelpMsg`) and `View()` (centered keybinding table)
+- Follows editor overlay pattern: full-screen takeover in `app.View()`, message-based transitions in `app.Update()`
+- Styles in `styles.go`: `helpTitle`, `helpSection`, `helpKey`, `helpDesc` using existing color palette
+- `?` triggers from `modeNormal`, any keypress dismisses back to `modeNormal`
+- `WindowSizeMsg` propagated to help pane for proper centering on resize
