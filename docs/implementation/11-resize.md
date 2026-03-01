@@ -1,7 +1,6 @@
 # 11 — Terminal Resize Handling
 
-**State:** `todo`
-> When complete: set State to `done`, fill in the Notes section below, and remove this line.
+**State:** `canceled`
 
 **Depends on:** `06-tui-todos.md`, `07-tui-notes.md`
 **Blocks:** nothing
@@ -32,4 +31,4 @@ Ensure the layout reflows correctly when the terminal is resized. This is a cros
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+Superseded by the vertical layout redesign. The tea.WindowSizeMsg wiring from ticket 05 is already in place. Detailed resize handling for the new layout is covered in 13-layout-redesign.md and 14-resize-vertical.md.
