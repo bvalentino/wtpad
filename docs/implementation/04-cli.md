@@ -1,7 +1,6 @@
 # 04 — CLI Subcommands
 
-**State:** `todo`
-> When complete: set State to `done`, fill in the Notes section below, and remove this line.
+**State:** `done`
 
 **Depends on:** `03-store.md`
 **Blocks:** `05-tui-root.md` (main.go routing)
@@ -23,27 +22,27 @@ wtpad done <n>      # mark todo #n done (1-indexed from ls)
 
 ## Tasks
 
-- [ ] In `main.go`, check `os.Args` before starting the TUI:
+- [x] In `main.go`, check `os.Args` before starting the TUI:
   - If no args → fall through to TUI (ticket `05-tui-root.md`)
   - If first arg matches a subcommand → handle and exit
-- [ ] Implement `cmdAdd(store, args)`:
+- [x] Implement `cmdAdd(store, args)`:
   - Join remaining args as the todo text
   - Load todos, append new `Todo{Text: text, Done: false}`, save
   - Print confirmation
-- [ ] Implement `cmdLs(store)`:
+- [x] Implement `cmdLs(store)`:
   - Load todos, print open todos numbered 1…N
   - Format: `1. Fix auth bug`
   - Completed todos printed after open ones, prefixed with `✓`
-- [ ] Implement `cmdNote(store, args)`:
+- [x] Implement `cmdNote(store, args)`:
   - Join remaining args as the note body
   - Generate a timestamp name, save as `.wtpad/<YYYYMMDD-HHMMSS>.md`
   - Print confirmation with the filename
-- [ ] Implement `cmdDone(store, args)`:
+- [x] Implement `cmdDone(store, args)`:
   - Parse arg as integer N
   - Load todos, find the Nth open todo (same order as `ls`)
   - Set `Done = true`, save
   - Print confirmation or error if N is out of range
-- [ ] Print usage and exit 1 for unknown subcommands
+- [x] Print usage and exit 1 for unknown subcommands
 
 ## Acceptance
 
@@ -53,4 +52,8 @@ wtpad done <n>      # mark todo #n done (1-indexed from ls)
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+- All subcommands implemented as thin wrappers around `store` package
+- `cmdNote` passes empty name to `SaveNote`, letting the store generate the timestamp and handle collisions
+- `cmdDone` indexes open todos in file order, matching `cmdLs` numbering
+- No-args case prints placeholder message; TUI entry point deferred to ticket 05
+- All errors printed to stderr with `os.Exit(1)`
