@@ -38,4 +38,16 @@ var (
 	noteConfirm = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")).
 			Bold(true)
+
+	// Editor overlay styles
+	editorHeader = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("62"))
+
+	editorFooter = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245"))
+
+	editorConfirm = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
 )

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"log"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -37,17 +39,19 @@ type App struct {
 	mode       appMode
 	todosPane  todosModel
 	notesPane  notesModel
+	editorPane editorModel
 }
 
 func New(s *store.Store, todos []model.Todo, notes []model.Note) App {
 	tp := newTodos(todos, s)
 	np := newNotes(notes, s)
 	return App{
-		store:     s,
-		focus:     focusTodos,
-		mode:      modeNormal,
-		todosPane: tp,
-		notesPane: np,
+		store:      s,
+		focus:      focusTodos,
+		mode:       modeNormal,
+		todosPane:  tp,
+		notesPane:  np,
+		editorPane: newEditorModel(s),
 	}
 }
 
@@ -64,7 +68,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.mode = modeNormal
 		return a, nil
 	case enterEditorMsg:
-		// TODO(ticket-08): set a.mode = modeEditor and open editor pane
+		m := msg.(enterEditorMsg)
+		a.editorPane = a.editorPane.openEditor(m.name, m.body, a.width, a.height)
+		a.mode = modeEditor
+		return a, nil
+	case saveNoteMsg:
+		notes, err := a.store.ListNotes()
+		if err != nil {
+			log.Printf("wtpad: failed to list notes after save: %v", err)
+		} else {
+			a.notesPane = a.notesPane.SetNotes(notes)
+		}
+		a.mode = modeNormal
+		return a, nil
+	case exitEditorMsg:
+		a.mode = modeNormal
 		return a, nil
 	}
 
@@ -73,6 +91,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = msg.Width
 		a.height = msg.Height
 		a = a.layoutPanes()
+		if a.mode == modeEditor {
+			var cmd tea.Cmd
+			a.editorPane, cmd = a.editorPane.Update(msg)
+			return a, cmd
+		}
 		return a, nil
 
 	case tea.KeyMsg:
@@ -92,6 +115,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Delegate to editor when in editor mode
+	if a.mode == modeEditor {
+		var cmd tea.Cmd
+		a.editorPane, cmd = a.editorPane.Update(msg)
+		return a, cmd
+	}
+
 	// Delegate to focused pane
 	var cmd tea.Cmd
 	switch a.focus {
@@ -104,6 +134,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) View() string {
+	if a.mode == modeEditor {
+		return a.editorPane.View()
+	}
+
 	todosStyle := unfocusedBorder
 	notesStyle := unfocusedBorder
 	if a.focus == focusTodos {
