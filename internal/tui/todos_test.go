@@ -43,8 +43,8 @@ func TestTodosScrollDownWithDone(t *testing.T) {
 		{Text: "open 1"},
 		{Text: "open 2"},
 		{Text: "open 3"},
-		{Text: "done 1", Done: true},
-		{Text: "done 2", Done: true},
+		{Text: "done 1", Status: model.StatusDone},
+		{Text: "done 2", Status: model.StatusDone},
 	}
 
 	m := newTodos(todos, nil)

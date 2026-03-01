@@ -27,8 +27,13 @@ func clearStatusAfter(d time.Duration) tea.Cmd {
 type enterInputMsg struct{}
 type exitInputMsg struct{}
 
-// todoPrefixWidth is the display width of the checkbox prefix ("○ " / "✓ ").
+// todoPrefixWidth is the display width of the checkbox prefix ("○ " / "✓ " / "▸ ").
 var todoPrefixWidth = lipgloss.Width("○ ")
+
+// TodoCounts holds the number of todos in each status.
+type TodoCounts struct {
+	Open, InProgress, Done int
+}
 
 type todosModel struct {
 	todos        []model.Todo
@@ -115,6 +120,8 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		}
 	case "d", " ":
 		m = m.toggleDone()
+	case "p":
+		m = m.toggleInProgress()
 	case "x", "delete":
 		m = m.deleteCurrent()
 	case "D":
@@ -182,7 +189,7 @@ func (m todosModel) View() string {
 	// Find where the done section starts (sortTodos guarantees open first).
 	doneStart := len(m.todos)
 	for i, t := range m.todos {
-		if t.Done {
+		if t.Status == model.StatusDone {
 			doneStart = i
 			break
 		}
@@ -190,14 +197,14 @@ func (m todosModel) View() string {
 
 	// Track whether we've rendered the hint + divider between open and done.
 	hintRendered := false
-	prevWasOpen := false
+	prevNotDone := false
 	indent := strings.Repeat(" ", todoPrefixWidth)
 
 	for i := m.scrollOffset; i < len(m.todos) && linesUsed < visibleLines; i++ {
 		todo := m.todos[i]
 
 		// Insert Add hint and divider at the open→done boundary.
-		if todo.Done && !hintRendered {
+		if todo.Status == model.StatusDone && !hintRendered {
 			hintRendered = true
 			// Add (a) hint
 			if linesUsed > 0 && linesUsed < visibleLines {
@@ -229,8 +236,8 @@ func (m todosModel) View() string {
 			break
 		}
 
-		// Blank line between open items for breathing room.
-		if !todo.Done && prevWasOpen && linesUsed < visibleLines {
+		// Blank line between non-done items for breathing room.
+		if todo.Status != model.StatusDone && prevNotDone && linesUsed < visibleLines {
 			if linesUsed > 0 {
 				b.WriteString("\n")
 				linesUsed++
@@ -245,27 +252,31 @@ func (m todosModel) View() string {
 
 		// Render the todo line(s) with wrapping.
 		var prefix string
-		if todo.Done {
+		switch todo.Status {
+		case model.StatusDone:
 			prefix = "✓ "
-		} else {
+		case model.StatusInProgress:
+			prefix = "▸ "
+		default:
 			prefix = "○ "
 		}
 
 		wrapped := wrapText(todo.Text, m.textWidth)
 		selected := i == m.cursor && m.focused
 
-		// Pick style once — same for all wrapped lines of this item.
+		// Pick base style from status, then compose selection background.
 		var style lipgloss.Style
 		styled := false
-		switch {
-		case todo.Done && selected:
-			style = todoDoneSelected
-			styled = true
-		case todo.Done:
+		switch todo.Status {
+		case model.StatusDone:
 			style = todoDone
 			styled = true
-		case selected:
-			style = todoSelected
+		case model.StatusInProgress:
+			style = todoInProgress
+			styled = true
+		}
+		if selected {
+			style = style.Background(selectionBg)
 			styled = true
 		}
 
@@ -289,7 +300,7 @@ func (m todosModel) View() string {
 			b.WriteString(line)
 			linesUsed++
 		}
-		prevWasOpen = !todo.Done
+		prevNotDone = todo.Status != model.StatusDone
 	}
 
 	// If all visible items were open, still show the Add hint at the end.
@@ -356,14 +367,14 @@ func (m todosModel) availableLines() int {
 // spacing or wrapping in View() must be reflected here.
 func (m todosModel) linesUpTo(targetIdx int) int {
 	linesUsed := 0
-	prevWasOpen := false
+	prevNotDone := false
 	hintRendered := false
 
 	for i := m.scrollOffset; i < len(m.todos) && i <= targetIdx; i++ {
 		todo := m.todos[i]
 
 		// Hint + divider at the open→done boundary.
-		if todo.Done && !hintRendered {
+		if todo.Status == model.StatusDone && !hintRendered {
 			hintRendered = true
 			if linesUsed > 0 {
 				linesUsed++ // blank before hint
@@ -374,8 +385,8 @@ func (m todosModel) linesUpTo(targetIdx int) int {
 			linesUsed++ // divider
 		}
 
-		// Blank line between consecutive open items.
-		if !todo.Done && prevWasOpen && linesUsed > 0 {
+		// Blank line between consecutive non-done items.
+		if todo.Status != model.StatusDone && prevNotDone && linesUsed > 0 {
 			linesUsed++
 		}
 
@@ -383,7 +394,7 @@ func (m todosModel) linesUpTo(targetIdx int) int {
 
 		// The item itself — may occupy multiple lines when wrapped.
 		linesUsed += len(wrapText(todo.Text, m.textWidth))
-		prevWasOpen = !todo.Done
+		prevNotDone = todo.Status != model.StatusDone
 	}
 
 	return linesUsed
@@ -419,7 +430,34 @@ func (m todosModel) toggleDone() todosModel {
 	if len(m.todos) == 0 {
 		return m
 	}
-	m.todos[m.cursor].Done = !m.todos[m.cursor].Done
+	t := &m.todos[m.cursor]
+	if t.Status == model.StatusDone {
+		t.Status = model.StatusOpen
+	} else {
+		t.Status = model.StatusDone
+	}
+	m.todos = sortTodos(m.todos)
+	m = m.clampCursor()
+	m = m.adjustScroll()
+	m.save()
+	return m
+}
+
+// toggleInProgress toggles InProgress on the selected todo, re-sorts, and saves.
+// Only toggles open ↔ in-progress. Done items are not affected (use d/Space first).
+func (m todosModel) toggleInProgress() todosModel {
+	if len(m.todos) == 0 {
+		return m
+	}
+	t := &m.todos[m.cursor]
+	if t.Status == model.StatusDone {
+		return m
+	}
+	if t.Status == model.StatusInProgress {
+		t.Status = model.StatusOpen
+	} else {
+		t.Status = model.StatusInProgress
+	}
 	m.todos = sortTodos(m.todos)
 	m = m.clampCursor()
 	m = m.adjustScroll()
@@ -443,7 +481,7 @@ func (m todosModel) deleteCurrent() todosModel {
 func (m todosModel) purgeDone() todosModel {
 	filtered := make([]model.Todo, 0, len(m.todos))
 	for _, t := range m.todos {
-		if !t.Done {
+		if t.Status != model.StatusDone {
 			filtered = append(filtered, t)
 		}
 	}
@@ -461,19 +499,27 @@ func (m todosModel) save() {
 	}
 }
 
-// sortTodos returns todos with open items first, then done items,
+// sortTodos returns todos grouped: in-progress first, then open, then done,
 // preserving relative order within each group.
 func sortTodos(todos []model.Todo) []model.Todo {
+	inProgress := make([]model.Todo, 0)
 	open := make([]model.Todo, 0, len(todos))
 	done := make([]model.Todo, 0)
 	for _, t := range todos {
-		if t.Done {
+		switch t.Status {
+		case model.StatusDone:
 			done = append(done, t)
-		} else {
+		case model.StatusInProgress:
+			inProgress = append(inProgress, t)
+		default:
 			open = append(open, t)
 		}
 	}
-	return append(open, done...)
+	result := make([]model.Todo, 0, len(todos))
+	result = append(result, inProgress...)
+	result = append(result, open...)
+	result = append(result, done...)
+	return result
 }
 
 // truncate shortens s to fit within width.
@@ -574,14 +620,18 @@ func (m todosModel) StatusMsg() string {
 	return m.statusMsg
 }
 
-// Counts returns the number of open and done todos.
-func (m todosModel) Counts() (open, done int) {
+// Counts returns the number of todos in each status.
+func (m todosModel) Counts() TodoCounts {
+	var c TodoCounts
 	for _, t := range m.todos {
-		if t.Done {
-			done++
-		} else {
-			open++
+		switch t.Status {
+		case model.StatusDone:
+			c.Done++
+		case model.StatusInProgress:
+			c.InProgress++
+		default:
+			c.Open++
 		}
 	}
-	return open, done
+	return c
 }

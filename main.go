@@ -65,7 +65,7 @@ func cmdAdd(s *store.Store, args []string) {
 		os.Exit(1)
 	}
 
-	todos = append(todos, model.Todo{Text: text, Done: false})
+	todos = append(todos, model.Todo{Text: text})
 	if err := s.SaveTodos(todos); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -88,14 +88,18 @@ func cmdLs(s *store.Store) {
 
 	n := 0
 	for _, t := range todos {
-		if !t.Done {
+		if t.Status != model.StatusDone {
 			n++
-			fmt.Printf("%d. %s\n", n, t.Text)
+			prefix := fmt.Sprintf("%d.", n)
+			if t.Status == model.StatusInProgress {
+				prefix = fmt.Sprintf("%d.~", n)
+			}
+			fmt.Printf("%s %s\n", prefix, t.Text)
 		}
 	}
 
 	for _, t := range todos {
-		if t.Done {
+		if t.Status == model.StatusDone {
 			fmt.Printf("✓ %s\n", t.Text)
 		}
 	}
@@ -139,7 +143,7 @@ func cmdDone(s *store.Store, args []string) {
 	openCount := 0
 	found := -1
 	for i, t := range todos {
-		if !t.Done {
+		if t.Status != model.StatusDone {
 			openCount++
 			if openCount == n {
 				found = i
@@ -153,7 +157,7 @@ func cmdDone(s *store.Store, args []string) {
 		os.Exit(1)
 	}
 
-	todos[found].Done = true
+	todos[found].Status = model.StatusDone
 	if err := s.SaveTodos(todos); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

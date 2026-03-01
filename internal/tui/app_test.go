@@ -257,6 +257,143 @@ func TestEditorDimensionsMatchContent(t *testing.T) {
 	}
 }
 
+func TestToggleInProgress(t *testing.T) {
+	s := tempStore(t)
+	todos := []model.Todo{{Text: "task 1"}, {Text: "task 2"}}
+	app := New(s, todos, nil, "main")
+	app = sendResize(t, app, 80, 40)
+
+	// Press 'p' to toggle first todo to in-progress
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	app = updated.(App)
+
+	// First open item should now be in-progress (and sorted after remaining open items)
+	found := false
+	for _, todo := range app.todosPane.todos {
+		if todo.Text == "task 1" {
+			if todo.Status != model.StatusInProgress {
+				t.Errorf("expected task 1 to be in-progress, got status %d", todo.Status)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("task 1 not found in todos")
+	}
+}
+
+func TestToggleInProgressOnDoneIsNoOp(t *testing.T) {
+	s := tempStore(t)
+	todos := []model.Todo{{Text: "done task", Status: model.StatusDone}}
+	app := New(s, todos, nil, "main")
+	app = sendResize(t, app, 80, 40)
+
+	// Press 'p' on a done item — should be a no-op
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	app = updated.(App)
+
+	if app.todosPane.todos[0].Status != model.StatusDone {
+		t.Error("pressing p on a done todo should not change status")
+	}
+}
+
+func TestToggleDoneClearsInProgress(t *testing.T) {
+	s := tempStore(t)
+	todos := []model.Todo{{Text: "wip task", Status: model.StatusInProgress}}
+	app := New(s, todos, nil, "main")
+	app = sendResize(t, app, 80, 40)
+
+	// Press 'd' to mark in-progress item as done
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	app = updated.(App)
+
+	if app.todosPane.todos[0].Status != model.StatusDone {
+		t.Errorf("expected StatusDone after pressing d, got %d", app.todosPane.todos[0].Status)
+	}
+}
+
+func TestSortTodosThreeGroups(t *testing.T) {
+	todos := []model.Todo{
+		{Text: "done", Status: model.StatusDone},
+		{Text: "wip", Status: model.StatusInProgress},
+		{Text: "open"},
+	}
+
+	sorted := sortTodos(todos)
+
+	if sorted[0].Text != "wip" {
+		t.Errorf("sorted[0] = %q, want 'wip'", sorted[0].Text)
+	}
+	if sorted[1].Text != "open" {
+		t.Errorf("sorted[1] = %q, want 'open'", sorted[1].Text)
+	}
+	if sorted[2].Text != "done" {
+		t.Errorf("sorted[2] = %q, want 'done'", sorted[2].Text)
+	}
+}
+
+func TestViewRendersInProgressPrefix(t *testing.T) {
+	s := tempStore(t)
+	todos := []model.Todo{
+		{Text: "open task"},
+		{Text: "wip task", Status: model.StatusInProgress},
+		{Text: "done task", Status: model.StatusDone},
+	}
+	app := New(s, todos, nil, "main")
+	app = sendResize(t, app, 80, 40)
+
+	out := app.View()
+
+	if !strings.Contains(out, "○ open task") {
+		t.Error("expected '○ open task' in view")
+	}
+	if !strings.Contains(out, "▸ wip task") {
+		t.Error("expected '▸ wip task' in view")
+	}
+	if !strings.Contains(out, "✓ done task") {
+		t.Error("expected '✓ done task' in view")
+	}
+}
+
+func TestFooterCountsWithInProgress(t *testing.T) {
+	s := tempStore(t)
+	todos := []model.Todo{
+		{Text: "open"},
+		{Text: "wip", Status: model.StatusInProgress},
+		{Text: "done", Status: model.StatusDone},
+	}
+	app := New(s, todos, nil, "main")
+	app = sendResize(t, app, 80, 40)
+
+	out := app.View()
+
+	if !strings.Contains(out, "1 open") {
+		t.Error("expected '1 open' in footer")
+	}
+	if !strings.Contains(out, "1 in progress") {
+		t.Error("expected '1 in progress' in footer")
+	}
+	if !strings.Contains(out, "1 done") {
+		t.Error("expected '1 done' in footer")
+	}
+}
+
+func TestFooterOmitsInProgressWhenZero(t *testing.T) {
+	s := tempStore(t)
+	todos := []model.Todo{
+		{Text: "open"},
+		{Text: "done", Status: model.StatusDone},
+	}
+	app := New(s, todos, nil, "main")
+	app = sendResize(t, app, 80, 40)
+
+	out := app.View()
+
+	if strings.Contains(out, "in progress") {
+		t.Error("footer should not show 'in progress' when count is 0")
+	}
+}
+
 func TestResizeContentDimensions(t *testing.T) {
 	s := tempStore(t)
 	app := New(s, nil, nil, "main")

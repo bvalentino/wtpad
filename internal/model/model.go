@@ -2,10 +2,19 @@ package model
 
 import "time"
 
+// TodoStatus represents the state of a todo item.
+type TodoStatus int
+
+const (
+	StatusOpen       TodoStatus = iota
+	StatusInProgress
+	StatusDone
+)
+
 // Todo represents a single task list item, parsed from a GFM task list line.
 type Todo struct {
-	Text string
-	Done bool
+	Text   string
+	Status TodoStatus
 }
 
 // Note represents a single markdown note file in .wtpad/.

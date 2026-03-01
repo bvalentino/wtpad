@@ -50,9 +50,9 @@ func TestLoadTodosMissingFile(t *testing.T) {
 func TestTodosRoundTrip(t *testing.T) {
 	s := tempStore(t)
 	want := []model.Todo{
-		{Text: "Buy groceries", Done: false},
-		{Text: "Fix login bug", Done: true},
-		{Text: "Review PR #42", Done: false},
+		{Text: "Buy groceries"},
+		{Text: "Fix login bug", Status: model.StatusDone},
+		{Text: "Review PR #42"},
 	}
 
 	if err := s.SaveTodos(want); err != nil {
@@ -74,9 +74,52 @@ func TestTodosRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTodosRoundTripInProgress(t *testing.T) {
+	s := tempStore(t)
+	want := []model.Todo{
+		{Text: "Open task"},
+		{Text: "Working on it", Status: model.StatusInProgress},
+		{Text: "Finished", Status: model.StatusDone},
+	}
+
+	if err := s.SaveTodos(want); err != nil {
+		t.Fatalf("SaveTodos: %v", err)
+	}
+
+	got, err := s.LoadTodos()
+	if err != nil {
+		t.Fatalf("LoadTodos: %v", err)
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d todos, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("todo[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	// Verify the raw file content uses correct markers.
+	data, err := os.ReadFile(filepath.Join(s.Dir(), todosFile))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	raw := string(data)
+	if !strings.Contains(raw, "- [ ] Open task") {
+		t.Error("expected '- [ ] Open task' in raw file")
+	}
+	if !strings.Contains(raw, "- [~] Working on it") {
+		t.Error("expected '- [~] Working on it' in raw file")
+	}
+	if !strings.Contains(raw, "- [x] Finished") {
+		t.Error("expected '- [x] Finished' in raw file")
+	}
+}
+
 func TestSaveTodosCreatesDir(t *testing.T) {
 	s := tempStore(t)
-	if err := s.SaveTodos([]model.Todo{{Text: "test", Done: false}}); err != nil {
+	if err := s.SaveTodos([]model.Todo{{Text: "test"}}); err != nil {
 		t.Fatalf("SaveTodos: %v", err)
 	}
 	if _, err := os.Stat(s.Dir()); err != nil {

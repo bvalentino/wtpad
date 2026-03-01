@@ -3,22 +3,22 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	// Todo pane styles
+	selectionBg = lipgloss.Color("236")
+
+	// Todo pane styles — one per status, selection bg composed at render time.
 	todoSelected = lipgloss.NewStyle().
-			Background(lipgloss.Color("236"))
+			Background(selectionBg)
 
 	todoDone = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")).
 			Strikethrough(true)
 
-	todoDoneSelected = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("240")).
-				Strikethrough(true).
-				Background(lipgloss.Color("236"))
+	todoInProgress = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("214"))
 
 	// Note pane styles
 	noteSelected = lipgloss.NewStyle().
-			Background(lipgloss.Color("236"))
+			Background(selectionBg)
 
 	noteHeader = lipgloss.NewStyle().
 			Bold(true).

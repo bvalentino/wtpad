@@ -336,8 +336,13 @@ func (a App) renderContent() string {
 
 // renderFooter returns the footer line with mode-aware hints.
 func (a App) renderFooter() string {
-	open, done := a.todosPane.Counts()
-	counts := fmt.Sprintf("%d open · %d done", open, done)
+	c := a.todosPane.Counts()
+	parts := []string{fmt.Sprintf("%d open", c.Open)}
+	if c.InProgress > 0 {
+		parts = append(parts, fmt.Sprintf("%d in progress", c.InProgress))
+	}
+	parts = append(parts, fmt.Sprintf("%d done", c.Done))
+	counts := strings.Join(parts, " · ")
 
 	if msg := a.todosPane.StatusMsg(); msg != "" {
 		return footerStyle.Render(counts + " · " + msg)

@@ -141,9 +141,11 @@ func parseTodoLine(line string) (model.Todo, bool) {
 	line = strings.TrimSpace(line)
 	switch {
 	case strings.HasPrefix(line, "- [x] "):
-		return model.Todo{Text: line[6:], Done: true}, true
+		return model.Todo{Text: line[6:], Status: model.StatusDone}, true
+	case strings.HasPrefix(line, "- [~] "):
+		return model.Todo{Text: line[6:], Status: model.StatusInProgress}, true
 	case strings.HasPrefix(line, "- [ ] "):
-		return model.Todo{Text: line[6:], Done: false}, true
+		return model.Todo{Text: line[6:], Status: model.StatusOpen}, true
 	default:
 		return model.Todo{}, false
 	}
@@ -157,9 +159,12 @@ func (s *Store) SaveTodos(todos []model.Todo) error {
 
 	var buf strings.Builder
 	for _, t := range todos {
-		if t.Done {
+		switch t.Status {
+		case model.StatusDone:
 			fmt.Fprintf(&buf, "- [x] %s\n", t.Text)
-		} else {
+		case model.StatusInProgress:
+			fmt.Fprintf(&buf, "- [~] %s\n", t.Text)
+		default:
 			fmt.Fprintf(&buf, "- [ ] %s\n", t.Text)
 		}
 	}
