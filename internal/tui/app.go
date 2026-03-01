@@ -40,7 +40,7 @@ type App struct {
 }
 
 func New(s *store.Store, todos []model.Todo, notes []model.Note) App {
-	tp := newTodos(todos)
+	tp := newTodos(todos, s)
 	np := newNotes(notes)
 	return App{
 		store:     s,
@@ -56,6 +56,15 @@ func (a App) Init() tea.Cmd {
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case enterInputMsg:
+		a.mode = modeInput
+		return a, nil
+	case exitInputMsg:
+		a.mode = modeNormal
+		return a, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
@@ -64,12 +73,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "tab":
-			a = a.toggleFocus()
-			return a, nil
-		case "q", "ctrl+c":
+		// ctrl+c always quits, regardless of mode
+		if msg.String() == "ctrl+c" {
 			return a, tea.Quit
+		}
+		// In normal mode, handle global keys
+		if a.mode == modeNormal {
+			switch msg.String() {
+			case "tab":
+				a = a.toggleFocus()
+				return a, nil
+			case "q":
+				return a, tea.Quit
+			}
 		}
 	}
 
@@ -110,8 +126,8 @@ func (a App) layoutPanes() App {
 	a.todosWidth = a.width * 2 / 5
 	a.notesWidth = a.width - a.todosWidth
 
-	a.todosPane.SetSize(a.todosWidth-borderSize, a.height-borderSize)
-	a.notesPane.SetSize(a.notesWidth-borderSize, a.height-borderSize)
+	a.todosPane = a.todosPane.SetSize(a.todosWidth-borderSize, a.height-borderSize)
+	a.notesPane = a.notesPane.SetSize(a.notesWidth-borderSize, a.height-borderSize)
 	return a
 }
 
@@ -121,7 +137,7 @@ func (a App) toggleFocus() App {
 	} else {
 		a.focus = focusTodos
 	}
-	a.todosPane.SetFocus(a.focus == focusTodos)
-	a.notesPane.SetFocus(a.focus == focusNotes)
+	a.todosPane = a.todosPane.SetFocus(a.focus == focusTodos)
+	a.notesPane = a.notesPane.SetFocus(a.focus == focusNotes)
 	return a
 }

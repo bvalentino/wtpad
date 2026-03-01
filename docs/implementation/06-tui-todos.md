@@ -1,7 +1,6 @@
 # 06 — Todo Pane
 
-**State:** `todo`
-> When complete: set State to `done`, fill in the Notes section below, and remove this line.
+**State:** `done`
 
 **Depends on:** `05-tui-root.md`
 **Blocks:** `11-resize.md`
@@ -15,31 +14,31 @@ Implement the todo pane in `internal/tui/todos.go`. This handles rendering the t
 ## Tasks
 
 ### Rendering
-- [ ] Render open todos first, then completed todos (dimmed, strikethrough via lipgloss)
-- [ ] Highlight the selected item with a distinct background or indicator
-- [ ] Show `○` prefix for open todos, `✓` for done
-- [ ] Scroll the list if it overflows the pane height
+- [x] Render open todos first, then completed todos (dimmed, strikethrough via lipgloss)
+- [x] Highlight the selected item with a distinct background or indicator
+- [x] Show `○` prefix for open todos, `✓` for done
+- [x] Scroll the list if it overflows the pane height
 
 ### Navigation
-- [ ] `j` / `↓` — move selection down
-- [ ] `k` / `↑` — move selection up
-- [ ] Clamp selection to valid range
+- [x] `j` / `↓` — move selection down
+- [x] `k` / `↑` — move selection up
+- [x] Clamp selection to valid range
 
 ### Add Todo
-- [ ] `a` — switch root mode to `modeInput`, render a text input at the bottom of the pane (use `bubbles/textinput`)
-- [ ] `Enter` in input mode — append todo to list, call `store.SaveTodos()`, return to `modeNormal`
-- [ ] `Esc` in input mode — discard, return to `modeNormal`
+- [x] `a` — switch root mode to `modeInput`, render a text input at the bottom of the pane (use `bubbles/textinput`)
+- [x] `Enter` in input mode — append todo to list, call `store.SaveTodos()`, return to `modeNormal`
+- [x] `Esc` in input mode — discard, return to `modeNormal`
 
 ### Toggle Done
-- [ ] `d` or `Space` — toggle `Done` on selected item, call `store.SaveTodos()`, save
+- [x] `d` or `Space` — toggle `Done` on selected item, call `store.SaveTodos()`, save
 
 ### Edit
-- [ ] `Enter` in normal mode — populate textinput with current todo text, switch to `modeInput`
-- [ ] Saving an edit updates the existing todo's `Text` in place (does not create a new one)
+- [x] `Enter` in normal mode — populate textinput with current todo text, switch to `modeInput`
+- [x] Saving an edit updates the existing todo's `Text` in place (does not create a new one)
 
 ### Delete
-- [ ] `x` or `Delete` — remove selected todo from slice, call `store.SaveTodos()`, adjust selection index
-- [ ] `D` — remove all todos where `Done == true`, call `store.SaveTodos()`
+- [x] `x` or `Delete` — remove selected todo from slice, call `store.SaveTodos()`, adjust selection index
+- [x] `D` — remove all todos where `Done == true`, call `store.SaveTodos()`
 
 ## Acceptance
 
@@ -49,4 +48,12 @@ Implement the todo pane in `internal/tui/todos.go`. This handles rendering the t
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+- Added `charmbracelet/bubbles` dependency for `textinput` component
+- `todosModel` owns `[]model.Todo` exclusively; root App does not keep a copy
+- All helpers use value receivers returning modified model (consistent with Bubble Tea convention)
+- `SetSize`/`SetFocus` also use value receivers returning the model
+- Mode transitions use `enterInputMsg`/`exitInputMsg` messages; root suppresses global keys (q/Tab) in `modeInput`
+- `sortTodos()` stable-partitions open items first, done items last
+- Scroll offset managed in `adjustScroll()` helper called from mutation points; `View()` is a pure read
+- `save()` helper centralizes `store.SaveTodos()` calls with error logging
+- `ctrl+c` handled unconditionally (always quits); `q` gated behind `modeNormal`
