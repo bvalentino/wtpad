@@ -6,23 +6,33 @@ import (
 	"strconv"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/bvalentino/wtpad/internal/model"
 	"github.com/bvalentino/wtpad/internal/store"
+	"github.com/bvalentino/wtpad/internal/tui"
 )
 
 func main() {
 	args := os.Args[1:]
 
-	// No args → TUI (ticket 05-tui-root.md)
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "TUI not yet implemented")
-		os.Exit(1)
+	if len(args) > 0 {
+		if args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+			printUsage()
+			return
+		}
 	}
 
 	s, err := store.New(".")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// No args → TUI
+	if len(args) == 0 {
+		runTUI(s)
+		return
 	}
 
 	switch args[0] {
@@ -34,8 +44,6 @@ func main() {
 		cmdNote(s, args[1:])
 	case "done":
 		cmdDone(s, args[1:])
-	case "--help", "-h", "help":
-		printUsage()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", args[0])
 		printUsage()
@@ -151,6 +159,26 @@ func cmdDone(s *store.Store, args []string) {
 	}
 
 	fmt.Printf("Done: %s\n", todos[found].Text)
+}
+
+func runTUI(s *store.Store) {
+	todos, err := s.LoadTodos()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	notes, err := s.ListNotes()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	app := tui.New(s, todos, notes)
+	if _, err := tea.NewProgram(app, tea.WithAltScreen()).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func printUsage() {
