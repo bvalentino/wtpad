@@ -23,4 +23,19 @@ var (
 				Foreground(lipgloss.Color("240")).
 				Strikethrough(true).
 				Background(lipgloss.Color("236"))
+
+	// Note pane styles
+	noteSelected = lipgloss.NewStyle().
+			Background(lipgloss.Color("236"))
+
+	noteHeader = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("62"))
+
+	notePreview = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245"))
+
+	noteConfirm = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
 )

@@ -21,6 +21,7 @@ Implement the full-screen note editor in `internal/tui/editor.go`. This is a mod
 - [ ] Show a footer hint: `Ctrl+S to save · Esc to discard`
 
 ### Opening the Editor
+- [ ] Re-enable `a.mode = modeEditor` in `app.go` `Update()` for `enterEditorMsg` (disabled in ticket 07 to prevent dead mode)
 - [ ] Root model passes either an empty string (new note) or existing note body (edit)
 - [ ] Pre-populate `textarea` with the provided content
 - [ ] Focus the textarea immediately on open

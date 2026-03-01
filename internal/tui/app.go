@@ -41,7 +41,7 @@ type App struct {
 
 func New(s *store.Store, todos []model.Todo, notes []model.Note) App {
 	tp := newTodos(todos, s)
-	np := newNotes(notes)
+	np := newNotes(notes, s)
 	return App{
 		store:     s,
 		focus:     focusTodos,
@@ -62,6 +62,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case exitInputMsg:
 		a.mode = modeNormal
+		return a, nil
+	case enterEditorMsg:
+		// TODO(ticket-08): set a.mode = modeEditor and open editor pane
 		return a, nil
 	}
 
