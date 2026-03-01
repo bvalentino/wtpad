@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"log"
 	"strings"
 
@@ -136,8 +135,7 @@ func (m todosModel) View() string {
 	}
 
 	var b strings.Builder
-
-	// Available lines for the todo list (reserve 1 for input if active)
+	linesUsed := 0
 	visibleLines := m.height
 	if m.inputActive {
 		visibleLines--
@@ -146,21 +144,80 @@ func (m todosModel) View() string {
 		visibleLines = 1
 	}
 
-	end := m.scrollOffset + visibleLines
-	if end > len(m.todos) {
-		end = len(m.todos)
+	// Find where the done section starts (sortTodos guarantees open first).
+	doneStart := len(m.todos)
+	for i, t := range m.todos {
+		if t.Done {
+			doneStart = i
+			break
+		}
 	}
 
-	for i := m.scrollOffset; i < end; i++ {
+	// Track whether we've rendered the hint + divider between open and done.
+	hintRendered := false
+	prevWasOpen := false
+
+	for i := m.scrollOffset; i < len(m.todos) && linesUsed < visibleLines; i++ {
 		todo := m.todos[i]
+
+		// Insert Add hint and divider at the open→done boundary.
+		if todo.Done && !hintRendered {
+			hintRendered = true
+			// Add (a) hint
+			if linesUsed > 0 && linesUsed < visibleLines {
+				b.WriteString("\n")
+				linesUsed++
+			}
+			if linesUsed < visibleLines {
+				b.WriteString("\n")
+				b.WriteString(hintStyle.Render("Add TODO (a)"))
+				linesUsed++
+			}
+			// Blank line after hint
+			if linesUsed < visibleLines {
+				b.WriteString("\n")
+				linesUsed++
+			}
+			// Divider
+			if linesUsed < visibleLines {
+				b.WriteString("\n")
+				linesUsed++
+			}
+			if linesUsed < visibleLines {
+				b.WriteString(dividerStyle.Render(strings.Repeat("─", m.width)))
+				linesUsed++
+			}
+		}
+
+		if linesUsed >= visibleLines {
+			break
+		}
+
+		// Blank line between open items for breathing room.
+		if !todo.Done && prevWasOpen && linesUsed < visibleLines {
+			if linesUsed > 0 {
+				b.WriteString("\n")
+				linesUsed++
+			}
+		}
+
+		// Newline before the item (except first rendered line).
+		if linesUsed > 0 {
+			b.WriteString("\n")
+			linesUsed++
+		}
+		if linesUsed >= visibleLines {
+			break
+		}
+
+		// Render the todo line.
 		var prefix string
 		if todo.Done {
 			prefix = "✓ "
 		} else {
 			prefix = "○ "
 		}
-
-		line := fmt.Sprintf("%s%s", prefix, todo.Text)
+		line := prefix + todo.Text
 		line = truncate(line, m.width)
 
 		selected := i == m.cursor && m.focused
@@ -174,12 +231,27 @@ func (m todosModel) View() string {
 		}
 
 		b.WriteString(line)
-		if i < end-1 || m.inputActive {
+		linesUsed++
+		prevWasOpen = !todo.Done
+	}
+
+	// If all visible items were open, still show the Add hint at the end.
+	if !hintRendered && doneStart > 0 && linesUsed > 0 && linesUsed < visibleLines {
+		b.WriteString("\n")
+		linesUsed++
+		if linesUsed < visibleLines {
 			b.WriteString("\n")
+			b.WriteString(hintStyle.Render("Add TODO (a)"))
+			linesUsed++
+		}
+		if linesUsed < visibleLines {
+			b.WriteString("\n")
+			linesUsed++
 		}
 	}
 
 	if m.inputActive {
+		b.WriteString("\n")
 		b.WriteString(m.input.View())
 	}
 

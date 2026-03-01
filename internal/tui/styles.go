@@ -3,14 +3,6 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	focusedBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62"))
-
-	unfocusedBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240"))
-
 	// Todo pane styles
 	todoSelected = lipgloss.NewStyle().
 			Background(lipgloss.Color("236"))
@@ -66,8 +58,27 @@ var (
 	helpDesc = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245"))
 
-	// Status bar style
-	statusBarStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("236")).
-			Foreground(lipgloss.Color("252"))
+	// Tab strip styles
+	tabActive = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("62")).
+			Bold(true)
+
+	tabInactive = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
+
+	// Header style
+	headerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("62"))
+
+	// Footer style
+	footerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245"))
+
+	// Hint style (dimmed inline hints like "Add (a)")
+	hintStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
+
+	// Divider style (between open/done todos)
+	dividerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
 )

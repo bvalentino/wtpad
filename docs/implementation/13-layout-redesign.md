@@ -1,6 +1,6 @@
 # 13 — Vertical Layout Redesign
 
-**State:** `todo`
+**State:** `done`
 > When complete: set State to `done`, fill in the Notes section below.
 
 **Depends on:** `06-tui-todos.md`, `07-tui-notes.md`, `08-tui-editor.md`, `09-tui-statusbar.md`
@@ -120,4 +120,14 @@ When the **Notes tab** is active, the layout mirrors horizontally:
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+Implemented vertical single-column tab layout replacing the old side-by-side two-pane layout.
+
+Key changes:
+- `app.go`: Replaced `focus`/`layoutPanes()`/`toggleFocus()` with `activeTab`/`layoutVertical()`/`switchTab()`/`cycleTab()`. ASCII art header shown when height >= 30, compact single-line header otherwise. 3-line tab strip with box-drawing chrome mirrors when Notes tab is active. Content area framed with side borders connected to tab strip. Inline footer replaces statusbar.
+- `todos.go`: View() now renders open todos with blank lines between items, "Add (a)" hint, horizontal divider, then completed todos below.
+- `notes.go`: No structural changes — already width-agnostic, now receives full terminal width.
+- `help.go`: Updated Global section with t/n/Tab tab switching keybindings.
+- `statusbar.go`: Deleted — footer inlined into app.go.
+- `styles.go`: Added tabActive, tabInactive, headerStyle, footerStyle, dividerStyle. Removed focusedBorder, unfocusedBorder, statusBarStyle.
+
+Tab switching: `t`/`n`/`Tab` only in modeNormal. `n` on notes tab falls through to pane for new note creation.

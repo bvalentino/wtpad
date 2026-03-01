@@ -71,7 +71,7 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 		m = m.moveCursor(1)
 	case "k", "up":
 		m = m.moveCursor(-1)
-	case "n":
+	case "n", "a":
 		return m, func() tea.Msg { return enterEditorMsg{} }
 	case "e", "enter":
 		if len(m.notes) > 0 {
@@ -92,7 +92,7 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 
 func (m notesModel) View() string {
 	if len(m.notes) == 0 {
-		return "No notes yet. Press 'n' to create one."
+		return "No notes yet. Press 'a' to create one."
 	}
 
 	var b strings.Builder
@@ -137,6 +137,21 @@ func (m notesModel) View() string {
 				rendered = noteSelected.Render(rendered)
 			}
 			b.WriteString(rendered)
+			linesUsed++
+		}
+	}
+
+	// Add note hint
+	if linesUsed > 0 && linesUsed < visibleLines {
+		b.WriteString("\n")
+		linesUsed++
+		if linesUsed < visibleLines {
+			b.WriteString("\n")
+			b.WriteString(hintStyle.Render("Add note (a)"))
+			linesUsed++
+		}
+		if linesUsed < visibleLines {
+			b.WriteString("\n")
 			linesUsed++
 		}
 	}

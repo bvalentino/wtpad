@@ -33,7 +33,8 @@ func (h helpModel) View() string {
 		keys []struct{ key, desc string }
 	}{
 		{"Global", []struct{ key, desc string }{
-			{"Tab", "Switch pane focus"},
+			{"t", "Todos tab"},
+			{"n", "Notes tab"},
 			{"?", "Toggle this help"},
 			{"q / Ctrl+C", "Quit"},
 		}},

@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"fmt"
 	"log"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -10,14 +12,11 @@ import (
 	"github.com/bvalentino/wtpad/internal/store"
 )
 
-// borderSize is the horizontal/vertical space consumed by a rounded border.
-const borderSize = 2
-
-type focusPane int
+type activeTab int
 
 const (
-	focusTodos focusPane = iota
-	focusNotes
+	tabTodos activeTab = iota
+	tabNotes
 )
 
 type appMode int
@@ -29,39 +28,56 @@ const (
 	modeHelp
 )
 
-// statusBarHeight is the number of terminal rows reserved for the status bar.
-const statusBarHeight = 1
+// Layout constants
+const (
+	tabStripHeight = 3
+	footerHeight   = 1
+	sideBorderSize = 2 // left + right │ borders
+)
+
+// ASCII art header, 6 lines.
+const asciiHeader = `  ___       _________              _________
+  __ |     / /__  __/_____________ ______  /
+  __ | /| / /__  /  ___  __ \  __ ` + "`" + `/  __  /
+  __ |/ |/ / _  /   __  /_/ / /_/ // /_/ /
+  ____/|__/  /_/    _  .___/\__,_/ \__,_/
+                    /_/`
+
+const asciiHeaderHeight = 6
 
 type App struct {
-	store      *store.Store
-	width      int
-	height     int
-	todosWidth int
-	notesWidth int
-	focus      focusPane
-	mode       appMode
+	store     *store.Store
+	width     int
+	height    int
+	activeTab activeTab
+	mode      appMode
+
+	// Pre-computed layout dimensions (set in layoutVertical)
+	showFullHeader bool
+	headerHeight   int
+	contentHeight  int
+	contentWidth   int
+
+	// Pane metadata
+	branch string
+
 	todosPane  todosModel
 	notesPane  notesModel
 	editorPane editorModel
 	helpPane   helpModel
-	statusBar  statusBarModel
 }
 
-func New(s *store.Store, todos []model.Todo, notes []model.Note, dir, branch string) App {
+func New(s *store.Store, todos []model.Todo, notes []model.Note, branch string) App {
 	tp := newTodos(todos, s)
 	np := newNotes(notes, s)
-	sb := newStatusBar(dir, branch)
-	open, done := tp.Counts()
-	sb.openCount = open
-	sb.doneCount = done
 	return App{
-		store:      s,
-		focus:      focusTodos,
-		mode:       modeNormal,
-		todosPane:  tp,
-		notesPane:  np,
+		store:     s,
+		activeTab: tabTodos,
+		mode:      modeNormal,
+		branch:    branch,
+		todosPane: tp,
+		notesPane: np,
 		editorPane: newEditorModel(s),
-		statusBar:  sb,
 	}
 }
 
@@ -73,17 +89,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case enterInputMsg:
 		a.mode = modeInput
-		a = a.refreshStatusBar()
 		return a, nil
 	case exitInputMsg:
 		a.mode = modeNormal
-		a = a.refreshStatusBar()
 		return a, nil
 	case enterEditorMsg:
 		m := msg.(enterEditorMsg)
 		a.editorPane = a.editorPane.openEditor(m.name, m.body, a.width, a.height)
 		a.mode = modeEditor
-		a = a.refreshStatusBar()
 		return a, nil
 	case saveNoteMsg:
 		notes, err := a.store.ListNotes()
@@ -93,15 +106,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.notesPane = a.notesPane.SetNotes(notes)
 		}
 		a.mode = modeNormal
-		a = a.refreshStatusBar()
 		return a, nil
 	case exitEditorMsg:
 		a.mode = modeNormal
-		a = a.refreshStatusBar()
 		return a, nil
 	case exitHelpMsg:
 		a.mode = modeNormal
-		a = a.refreshStatusBar()
 		return a, nil
 	}
 
@@ -109,7 +119,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		a = a.layoutPanes()
+		a = a.layoutVertical()
 		if a.mode == modeEditor {
 			var cmd tea.Cmd
 			a.editorPane, cmd = a.editorPane.Update(msg)
@@ -129,14 +139,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// In normal mode, handle global keys
 		if a.mode == modeNormal {
 			switch msg.String() {
-			case "tab":
-				a = a.toggleFocus()
-				return a, nil
+			case "t":
+				if a.activeTab != tabTodos {
+					a = a.switchTab(tabTodos)
+					return a, nil
+				}
+				// On todos tab, 't' falls through to pane
+			case "n":
+				if a.activeTab != tabNotes {
+					a = a.switchTab(tabNotes)
+					return a, nil
+				}
+				// On notes tab, 'n' falls through to pane (new note)
 			case "?":
 				a.helpPane.width = a.width
 				a.helpPane.height = a.height
 				a.mode = modeHelp
-				a = a.refreshStatusBar()
 				return a, nil
 			case "q":
 				return a, tea.Quit
@@ -158,15 +176,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
-	// Delegate to focused pane
+	// Delegate to active tab's pane
 	var cmd tea.Cmd
-	switch a.focus {
-	case focusTodos:
+	switch a.activeTab {
+	case tabTodos:
 		a.todosPane, cmd = a.todosPane.Update(msg)
-	case focusNotes:
+	case tabNotes:
 		a.notesPane, cmd = a.notesPane.Update(msg)
 	}
-	a = a.refreshStatusBar()
 	return a, cmd
 }
 
@@ -178,66 +195,198 @@ func (a App) View() string {
 		return a.editorPane.View()
 	}
 
-	paneHeight := a.height - borderSize - statusBarHeight
-
-	todosStyle := unfocusedBorder
-	notesStyle := unfocusedBorder
-	if a.focus == focusTodos {
-		todosStyle = focusedBorder
-	} else {
-		notesStyle = focusedBorder
+	// Before the first WindowSizeMsg, dimensions are zero.
+	if a.width == 0 || a.height == 0 {
+		return ""
 	}
 
-	todosView := todosStyle.
-		Width(a.todosWidth - borderSize).
-		Height(paneHeight).
-		Render(a.todosPane.View())
+	var sections []string
 
-	notesView := notesStyle.
-		Width(a.notesWidth - borderSize).
-		Height(paneHeight).
-		Render(a.notesPane.View())
+	// Header
+	sections = append(sections, a.renderHeader())
 
-	panes := lipgloss.JoinHorizontal(lipgloss.Top, todosView, notesView)
+	// Tab strip
+	sections = append(sections, a.renderTabStrip())
 
-	return lipgloss.JoinVertical(lipgloss.Left, panes, a.statusBar.View(a.width))
+	// Content area with side borders
+	sections = append(sections, a.renderContent())
+
+	// Footer
+	sections = append(sections, a.renderFooter())
+
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
-func (a App) layoutPanes() App {
-	a.todosWidth = a.width * 2 / 5
-	a.notesWidth = a.width - a.todosWidth
-
-	paneHeight := a.height - borderSize - statusBarHeight
-	a.todosPane = a.todosPane.SetSize(a.todosWidth-borderSize, paneHeight)
-	a.notesPane = a.notesPane.SetSize(a.notesWidth-borderSize, paneHeight)
-	return a
+// renderHeader returns the ASCII art or compact header.
+func (a App) renderHeader() string {
+	if a.showFullHeader {
+		return headerStyle.Render(asciiHeader)
+	}
+	compact := "wtpad"
+	if a.branch != "" {
+		compact += " · " + a.branch
+	}
+	return headerStyle.Render(compact)
 }
 
-func (a App) refreshStatusBar() App {
+// renderTabStrip returns the 3-line tab chrome.
+func (a App) renderTabStrip() string {
+	todoLabel := " TODO (t) "
+	noteLabel := " Notes (n) "
+	w := a.width
+
+	if a.activeTab == tabTodos {
+		return a.renderTabStripLeft(todoLabel, noteLabel, w)
+	}
+	return a.renderTabStripRight(todoLabel, noteLabel, w)
+}
+
+// renderTabStripLeft renders tab strip with the left tab (Todos) active.
+func (a App) renderTabStripLeft(activeLabel, inactiveLabel string, w int) string {
+	activeLabelWidth := lipgloss.Width(activeLabel)
+	inactiveLabelDisplay := tabInactive.Render(inactiveLabel)
+
+	// Line 1: ┌──────────┐
+	line1Top := "┌" + strings.Repeat("─", activeLabelWidth) + "┐"
+
+	// Line 2: │ Todo (t) │ Notes (n)
+	line2 := "│" + tabActive.Render(activeLabel) + "│ " + inactiveLabelDisplay
+
+	// Line 3: │          └───────────┐
+	// Width: "│" (1) + spaces (activeLabelWidth) + "└" (1) + dashes + "┐" (1) = w
+	remaining := w - activeLabelWidth - 3
+	if remaining < 0 {
+		remaining = 0
+	}
+	line3 := "│" + strings.Repeat(" ", activeLabelWidth) + "└" + strings.Repeat("─", remaining) + "┐"
+
+	return line1Top + "\n" + line2 + "\n" + line3
+}
+
+// renderTabStripRight renders tab strip with the right tab (Notes) active.
+func (a App) renderTabStripRight(inactiveLabel, activeLabel string, w int) string {
+	activeLabelWidth := lipgloss.Width(activeLabel)
+	inactiveLabelDisplay := tabInactive.Render(inactiveLabel)
+	inactiveLabelWidth := lipgloss.Width(inactiveLabelDisplay)
+
+	// Position: inactive label on left, then active tab box on right
+	// The active tab box starts after the inactive label + spacing
+	leftPad := inactiveLabelWidth + 2 // leading " " + label + " " before │
+
+	// Line 1: spaces + ┌──────────┐
+	line1 := strings.Repeat(" ", leftPad) + "┌" + strings.Repeat("─", activeLabelWidth) + "┐"
+
+	// Line 2: " Todo (t) │ Notes (n)│"
+	line2 := " " + inactiveLabelDisplay + " │" + tabActive.Render(activeLabel) + "│"
+
+	// Line 3: ┌────────────┘           └─────────────────────┐
+	// ┘ aligns with left │ of tab box, └ aligns with right │
+	// Content top border wraps around the tab opening.
+	// "┌" (1) + dashes (leftPad-1) + "┘" (1) + spaces (activeLabelWidth) + "└" (1) + dashes + "┐" (1) = w
+	leftFill := leftPad - 1
+	if leftFill < 0 {
+		leftFill = 0
+	}
+	rightFill := w - leftPad - activeLabelWidth - 3 // -3 for ┘, └, ┐
+	if rightFill < 0 {
+		rightFill = 0
+	}
+	line3 := "┌" + strings.Repeat("─", leftFill) + "┘" +
+		strings.Repeat(" ", activeLabelWidth) +
+		"└" + strings.Repeat("─", rightFill) + "┐"
+
+	return line1 + "\n" + line2 + "\n" + line3
+}
+
+// renderContent renders the active tab's content with side borders.
+func (a App) renderContent() string {
+	var content string
+	switch a.activeTab {
+	case tabTodos:
+		content = a.todosPane.View()
+	case tabNotes:
+		content = a.notesPane.View()
+	}
+
+	// Split content into lines and pad/frame each with side borders
+	lines := strings.Split(content, "\n")
+
+	var b strings.Builder
+	for i := 0; i < a.contentHeight; i++ {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		line := ""
+		if i < len(lines) {
+			line = lines[i]
+		}
+		// Pad line to content width
+		lineWidth := lipgloss.Width(line)
+		pad := a.contentWidth - lineWidth
+		if pad < 0 {
+			pad = 0
+		}
+		b.WriteString("│ " + line + strings.Repeat(" ", pad) + " │")
+	}
+
+	// Bottom border
+	b.WriteString("\n")
+	b.WriteString("└" + strings.Repeat("─", a.width-2) + "┘")
+
+	return b.String()
+}
+
+// renderFooter returns the footer line with mode-aware hints.
+func (a App) renderFooter() string {
 	open, done := a.todosPane.Counts()
-	a.statusBar.openCount = open
-	a.statusBar.doneCount = done
+	counts := fmt.Sprintf("%d open · %d done", open, done)
 
+	var hint string
 	switch a.mode {
-	case modeNormal:
-		a.statusBar.hint = "? help · tab switch"
 	case modeInput:
-		a.statusBar.hint = "enter confirm · esc cancel"
+		hint = "enter confirm · esc cancel"
 	case modeEditor:
-		a.statusBar.hint = "ctrl+s save · esc discard"
+		hint = "ctrl+s save · esc discard"
 	case modeHelp:
-		a.statusBar.hint = "esc close"
+		hint = "esc close"
+	default:
+		hint = "? help · t/n switch"
 	}
+
+	return footerStyle.Render(counts + " · " + hint)
+}
+
+// layoutVertical computes dimensions for the vertical layout.
+func (a App) layoutVertical() App {
+	if a.height >= 30 {
+		a.showFullHeader = true
+		a.headerHeight = asciiHeaderHeight
+	} else {
+		a.showFullHeader = false
+		a.headerHeight = 1
+	}
+
+	// contentHeight: total height minus header, tab strip, footer, bottom border
+	a.contentHeight = a.height - a.headerHeight - tabStripHeight - footerHeight - 1 // -1 for bottom border └─┘
+	if a.contentHeight < 1 {
+		a.contentHeight = 1
+	}
+
+	a.contentWidth = a.width - sideBorderSize - 2 // -2 for the spaces after │
+	if a.contentWidth < 1 {
+		a.contentWidth = 1
+	}
+
+	a.todosPane = a.todosPane.SetSize(a.contentWidth, a.contentHeight)
+	a.notesPane = a.notesPane.SetSize(a.contentWidth, a.contentHeight)
 	return a
 }
 
-func (a App) toggleFocus() App {
-	if a.focus == focusTodos {
-		a.focus = focusNotes
-	} else {
-		a.focus = focusTodos
-	}
-	a.todosPane = a.todosPane.SetFocus(a.focus == focusTodos)
-	a.notesPane = a.notesPane.SetFocus(a.focus == focusNotes)
+// switchTab switches to the given tab.
+func (a App) switchTab(tab activeTab) App {
+	a.activeTab = tab
+	a.todosPane = a.todosPane.SetFocus(tab == tabTodos)
+	a.notesPane = a.notesPane.SetFocus(tab == tabNotes)
 	return a
 }
+
