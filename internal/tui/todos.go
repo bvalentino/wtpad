@@ -173,16 +173,16 @@ func (m todosModel) View() string {
 				b.WriteString(hintStyle.Render("Add TODO (a)"))
 				linesUsed++
 			}
+			// End hint line (terminator, no count)
+			if linesUsed < visibleLines {
+				b.WriteString("\n")
+			}
 			// Blank line after hint
 			if linesUsed < visibleLines {
 				b.WriteString("\n")
 				linesUsed++
 			}
 			// Divider
-			if linesUsed < visibleLines {
-				b.WriteString("\n")
-				linesUsed++
-			}
 			if linesUsed < visibleLines {
 				b.WriteString(dividerStyle.Render(strings.Repeat("─", m.width)))
 				linesUsed++
@@ -202,12 +202,9 @@ func (m todosModel) View() string {
 		}
 
 		// Newline before the item (except first rendered line).
+		// This \n is a line terminator, not a visible line — don't increment linesUsed.
 		if linesUsed > 0 {
 			b.WriteString("\n")
-			linesUsed++
-		}
-		if linesUsed >= visibleLines {
-			break
 		}
 
 		// Render the todo line.
@@ -281,21 +278,77 @@ func (m todosModel) clampCursor() todosModel {
 	return m
 }
 
-// adjustScroll ensures scrollOffset keeps the cursor visible within the pane.
-func (m todosModel) adjustScroll() todosModel {
-	visibleLines := m.height
+// availableLines returns the number of lines available for todo rendering.
+func (m todosModel) availableLines() int {
+	h := m.height
 	if m.inputActive {
-		visibleLines--
+		h--
 	}
-	if visibleLines < 1 {
-		visibleLines = 1
+	if h < 1 {
+		h = 1
 	}
+	return h
+}
+
+// linesUpTo counts rendered lines from scrollOffset through targetIdx,
+// mirroring the View() line-accounting logic.
+func (m todosModel) linesUpTo(targetIdx int) int {
+	linesUsed := 0
+	prevWasOpen := false
+	hintRendered := false
+
+	for i := m.scrollOffset; i < len(m.todos) && i <= targetIdx; i++ {
+		todo := m.todos[i]
+
+		// Hint + divider at the open→done boundary.
+		if todo.Done && !hintRendered {
+			hintRendered = true
+			if linesUsed > 0 {
+				linesUsed++ // blank before hint
+			}
+			linesUsed++ // hint text
+			// hint line terminator (no count)
+			linesUsed++ // blank after hint
+			linesUsed++ // divider
+		}
+
+		// Blank line between consecutive open items.
+		if !todo.Done && prevWasOpen && linesUsed > 0 {
+			linesUsed++
+		}
+
+		// Newline before item is a terminator (no count).
+
+		// The item itself.
+		linesUsed++
+		prevWasOpen = !todo.Done
+	}
+
+	return linesUsed
+}
+
+// adjustScroll ensures scrollOffset keeps the cursor visible within the pane.
+// Uses line counting to account for blank lines and hint/divider sections.
+func (m todosModel) adjustScroll() todosModel {
+	if m.height < 1 || len(m.todos) == 0 {
+		return m
+	}
+
+	// Scroll up if cursor is above viewport.
 	if m.cursor < m.scrollOffset {
 		m.scrollOffset = m.cursor
 	}
-	if m.cursor >= m.scrollOffset+visibleLines {
-		m.scrollOffset = m.cursor - visibleLines + 1
+
+	// Scroll down if cursor is below viewport.
+	avail := m.availableLines()
+	for m.linesUpTo(m.cursor) > avail {
+		m.scrollOffset++
+		if m.scrollOffset > m.cursor {
+			m.scrollOffset = m.cursor
+			break
+		}
 	}
+
 	return m
 }
 

@@ -1,6 +1,6 @@
 # 14 — Resize Handling (Vertical Layout)
 
-**State:** `todo`
+**State:** `done`
 > When complete: set State to `done`, fill in the Notes section below.
 
 **Depends on:** `13-layout-redesign.md`
@@ -27,13 +27,13 @@ Total width
 
 ## Tasks
 
-- [ ] Verify `tea.WindowSizeMsg` is still handled in `app.Update()` (from ticket 05) — it should be
-- [ ] On `tea.WindowSizeMsg`, update `app.width` and `app.height`
-- [ ] Derive `contentHeight = height - 3` and `contentWidth = width`
-- [ ] Propagate new dimensions to both `todos.Model` and `notes.Model` on every resize, regardless of which tab is active (so switching tabs after resize is instant)
-- [ ] If editor overlay is active on resize, update the `textarea` dimensions to `contentWidth` × `contentHeight`
-- [ ] If help overlay is active on resize, reflow the help content to the new width
-- [ ] Test with rapid resize (drag terminal corner) — no panics, no visual artifacts
+- [x] Verify `tea.WindowSizeMsg` is still handled in `app.Update()` (from ticket 05) — it should be
+- [x] On `tea.WindowSizeMsg`, update `app.width` and `app.height`
+- [x] Derive `contentHeight = height - 3` and `contentWidth = width`
+- [x] Propagate new dimensions to both `todos.Model` and `notes.Model` on every resize, regardless of which tab is active (so switching tabs after resize is instant)
+- [x] If editor overlay is active on resize, update the `textarea` dimensions to `contentWidth` × `contentHeight`
+- [x] If help overlay is active on resize, reflow the help content to the new width
+- [x] Test with rapid resize (drag terminal corner) — no panics, no visual artifacts
 
 ## Acceptance
 
@@ -44,4 +44,11 @@ Total width
 
 ## Notes
 
-<!-- Claude Code: add implementation notes here when done -->
+All resize handling was already implemented as part of ticket 13 (vertical layout redesign):
+
+- `app.Update()` handles `tea.WindowSizeMsg` at app.go:119-132
+- `layoutVertical()` derives contentHeight/contentWidth and propagates to both panes via `SetSize()`
+- Editor overlay receives `WindowSizeMsg` directly and updates textarea dimensions
+- Help overlay gets width/height updated and uses them for centering
+- `contentHeight` is clamped to minimum 1 to prevent panics on very small terminals
+- Added 7 resize-specific unit tests covering: both-pane propagation, small terminal, header toggle, rapid resize, editor resize, help resize, and dimension math
