@@ -42,29 +42,28 @@ func newEditorModel(s *store.Store) editorModel {
 }
 
 // openEditor prepares the editor for a new or existing note.
+// w and h are the content area dimensions (already excluding app chrome).
 func (e editorModel) openEditor(name, body string, w, h int) editorModel {
 	e.name = name
 	e.initialBody = body
 	e.confirmDiscard = false
 	e.err = nil
+	e.textarea.SetValue(body)
+	e.textarea.Focus()
+	return e.resize(w, h)
+}
+
+// resize updates the editor dimensions to fit within the content area.
+func (e editorModel) resize(w, h int) editorModel {
 	e.width = w
 	e.height = h
-	e.textarea.SetValue(body)
 	e.textarea.SetWidth(w)
-	e.textarea.SetHeight(h - 2) // minus header + footer
-	e.textarea.Focus()
+	e.textarea.SetHeight(h - 1) // minus header line
 	return e
 }
 
 func (e editorModel) Update(msg tea.Msg) (editorModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		e.width = msg.Width
-		e.height = msg.Height
-		e.textarea.SetWidth(msg.Width)
-		e.textarea.SetHeight(msg.Height - 2)
-		return e, nil
-
 	case tea.KeyMsg:
 		// Confirm-discard mode: only y/n matter
 		if e.confirmDiscard {
@@ -110,8 +109,19 @@ func (e editorModel) dirty() bool {
 	return e.textarea.Value() != e.initialBody
 }
 
+// FooterHint returns the contextual hint for the app footer.
+func (e editorModel) FooterHint() string {
+	switch {
+	case e.err != nil:
+		return fmt.Sprintf("save failed: %v", e.err)
+	case e.confirmDiscard:
+		return "discard changes? y/n"
+	default:
+		return "ctrl+s save · esc discard"
+	}
+}
+
 func (e editorModel) View() string {
-	// Header
 	header := "New Note"
 	if e.name != "" {
 		if t, err := time.Parse(noteTimeFmt, e.name); err == nil {
@@ -122,16 +132,5 @@ func (e editorModel) View() string {
 	}
 	headerLine := editorHeader.Render(header)
 
-	// Footer
-	var footerLine string
-	switch {
-	case e.err != nil:
-		footerLine = editorConfirm.Render(fmt.Sprintf("Save failed: %v", e.err))
-	case e.confirmDiscard:
-		footerLine = editorConfirm.Render("Discard changes? y/n")
-	default:
-		footerLine = editorFooter.Render("Ctrl+S to save · Esc to discard")
-	}
-
-	return headerLine + "\n" + e.textarea.View() + "\n" + footerLine
+	return headerLine + "\n" + e.textarea.View()
 }

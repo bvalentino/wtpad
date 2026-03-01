@@ -134,14 +134,16 @@ func TestResizeInEditorMode(t *testing.T) {
 		t.Fatalf("expected modeEditor, got %d", app.mode)
 	}
 
-	// Resize while in editor mode
+	// Resize while in editor mode — editor gets content dimensions, not full terminal
 	app = sendResize(t, app, 120, 50)
 
-	if app.editorPane.width != 120 {
-		t.Errorf("editor width = %d, want 120", app.editorPane.width)
+	// contentWidth = 120 - 2 (borders) - 2 (spaces) = 116
+	// contentHeight = 50 - 6 (full header) - 3 (tabs) - 1 (footer) - 1 (bottom border) = 39
+	if app.editorPane.width != 116 {
+		t.Errorf("editor width = %d, want 116", app.editorPane.width)
 	}
-	if app.editorPane.height != 50 {
-		t.Errorf("editor height = %d, want 50", app.editorPane.height)
+	if app.editorPane.height != 39 {
+		t.Errorf("editor height = %d, want 39", app.editorPane.height)
 	}
 
 	// View must not panic
@@ -179,6 +181,79 @@ func TestResizeInHelpMode(t *testing.T) {
 	out := app.View()
 	if !strings.Contains(out, "keyboard shortcuts") {
 		t.Error("help view should contain 'keyboard shortcuts' after resize")
+	}
+}
+
+func TestEditorRendersInsideLayout(t *testing.T) {
+	s := tempStore(t)
+	app := New(s, nil, nil, "main")
+
+	app = sendResize(t, app, 80, 40)
+	updated, _ := app.Update(enterEditorMsg{name: "", body: "hello"})
+	app = updated.(App)
+
+	out := app.View()
+
+	// Editor mode should still show the tab strip
+	if !strings.Contains(out, "TODO (t)") {
+		t.Error("editor view should contain tab strip")
+	}
+
+	// Should show side borders (content box)
+	if !strings.Contains(out, "│") {
+		t.Error("editor view should contain side borders")
+	}
+
+	// Should show bottom border
+	if !strings.Contains(out, "└") {
+		t.Error("editor view should contain bottom border")
+	}
+
+	// Should show footer with editor hints
+	if !strings.Contains(out, "ctrl+s save") {
+		t.Error("editor view should contain footer hints")
+	}
+
+	// Should show the editor header
+	if !strings.Contains(out, "New Note") {
+		t.Error("editor view should contain editor header")
+	}
+}
+
+func TestEditorFooterShowsContextualHints(t *testing.T) {
+	s := tempStore(t)
+	app := New(s, nil, nil, "main")
+
+	app = sendResize(t, app, 80, 40)
+	updated, _ := app.Update(enterEditorMsg{name: "", body: "hello"})
+	app = updated.(App)
+
+	// Type something to make it dirty, then press Esc to trigger confirm
+	updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	app = updated.(App)
+	updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	app = updated.(App)
+
+	out := app.View()
+	if !strings.Contains(out, "discard changes? y/n") {
+		t.Error("editor footer should show discard confirmation, got: " + out[len(out)-100:])
+	}
+}
+
+func TestEditorDimensionsMatchContent(t *testing.T) {
+	s := tempStore(t)
+	app := New(s, nil, nil, "main")
+
+	app = sendResize(t, app, 80, 40)
+	updated, _ := app.Update(enterEditorMsg{name: "", body: "test"})
+	app = updated.(App)
+
+	// Editor should receive content dimensions, not full terminal
+	if app.editorPane.width != app.contentWidth {
+		t.Errorf("editor width = %d, want contentWidth = %d", app.editorPane.width, app.contentWidth)
+	}
+	if app.editorPane.height != app.contentHeight {
+		t.Errorf("editor height = %d, want contentHeight = %d", app.editorPane.height, app.contentHeight)
 	}
 }
 

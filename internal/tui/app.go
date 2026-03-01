@@ -95,7 +95,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case enterEditorMsg:
 		m := msg.(enterEditorMsg)
-		a.editorPane = a.editorPane.openEditor(m.name, m.body, a.width, a.height)
+		a.editorPane = a.editorPane.openEditor(m.name, m.body, a.contentWidth, a.contentHeight)
 		a.mode = modeEditor
 		return a, nil
 	case saveNoteMsg:
@@ -121,9 +121,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.height = msg.Height
 		a = a.layoutVertical()
 		if a.mode == modeEditor {
-			var cmd tea.Cmd
-			a.editorPane, cmd = a.editorPane.Update(msg)
-			return a, cmd
+			a.editorPane = a.editorPane.resize(a.contentWidth, a.contentHeight)
 		}
 		if a.mode == modeHelp {
 			a.helpPane.width = msg.Width
@@ -191,10 +189,6 @@ func (a App) View() string {
 	if a.mode == modeHelp {
 		return a.helpPane.View()
 	}
-	if a.mode == modeEditor {
-		return a.editorPane.View()
-	}
-
 	// Before the first WindowSizeMsg, dimensions are zero.
 	if a.width == 0 || a.height == 0 {
 		return ""
@@ -301,11 +295,15 @@ func (a App) renderTabStripRight(inactiveLabel, activeLabel string, w int) strin
 // renderContent renders the active tab's content with side borders.
 func (a App) renderContent() string {
 	var content string
-	switch a.activeTab {
-	case tabTodos:
-		content = a.todosPane.View()
-	case tabNotes:
-		content = a.notesPane.View()
+	if a.mode == modeEditor {
+		content = a.editorPane.View()
+	} else {
+		switch a.activeTab {
+		case tabTodos:
+			content = a.todosPane.View()
+		case tabNotes:
+			content = a.notesPane.View()
+		}
 	}
 
 	// Split content into lines and pad/frame each with side borders
@@ -350,7 +348,7 @@ func (a App) renderFooter() string {
 	case modeInput:
 		hint = "enter confirm · esc cancel"
 	case modeEditor:
-		hint = "ctrl+s save · esc discard"
+		hint = a.editorPane.FooterHint()
 	case modeHelp:
 		hint = "esc close"
 	default:
