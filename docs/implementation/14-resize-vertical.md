@@ -16,10 +16,10 @@ Ensure the vertical layout reflows correctly on terminal resize. This is simpler
 
 ```
 Total height
-  - 1  (header line)
-  - 1  (tab strip)
-  - 1  (footer)
-  = contentHeight  (passed to active tab)
+  - headerHeight  (6 if height >= 30, else 1)
+  - 3             (tab strip: 3 lines)
+  - 1             (footer)
+  = contentHeight
 
 Total width
   = contentWidth  (passed to active tab as-is, no splitting)
