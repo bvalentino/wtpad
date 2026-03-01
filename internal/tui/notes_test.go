@@ -225,8 +225,6 @@ func TestNotesRenderPreview(t *testing.T) {
 	m := newNotes(notes, s)
 	m = m.SetSize(40, 20)
 	m = m.SetFocus(true)
-	// Load the body
-	m = m.ensureBodyLoaded()
 
 	view := m.View()
 	if !strings.Contains(view, "My Note") {
@@ -234,17 +232,17 @@ func TestNotesRenderPreview(t *testing.T) {
 	}
 }
 
-func TestNotesScrollWithVariableHeight(t *testing.T) {
+func TestNotesScrollWithFixedHeight(t *testing.T) {
 	s := tempNotesStore(t)
-	// Create notes with multi-line bodies so each takes 3 lines (header + 2 preview)
+	// Each note takes 2 lines (header + 1 body line)
 	notes := seedNotes(t, s,
 		[]string{"20260101-100000", "20260201-100000", "20260301-100000", "20260401-100000"},
 		[]string{"line1\nline2\nline3", "line1\nline2\nline3", "line1\nline2\nline3", "line1\nline2\nline3"},
 	)
 
 	m := newNotes(notes, s)
-	// Height=6 fits 2 collapsed notes (3 lines each)
-	m = m.SetSize(40, 6)
+	// Height=4 fits 2 notes (2 lines each)
+	m = m.SetSize(40, 4)
 	m = m.SetFocus(true)
 
 	// Navigate to 3rd note — should scroll since first 2 fill the viewport
@@ -255,6 +253,29 @@ func TestNotesScrollWithVariableHeight(t *testing.T) {
 	}
 	if m.scrollOffset == 0 {
 		t.Errorf("scrollOffset should have advanced, still 0")
+	}
+}
+
+func TestNotesSelectedNotExpanded(t *testing.T) {
+	s := tempNotesStore(t)
+	notes := seedNotes(t, s,
+		[]string{"20260228-100000"},
+		[]string{"# My Note\nfirst line\nsecond line\nthird line"},
+	)
+
+	m := newNotes(notes, s)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	view := m.View()
+	if strings.Contains(view, "second line") {
+		t.Errorf("selected note should not show second line, got %q", view)
+	}
+	if strings.Contains(view, "third line") {
+		t.Errorf("selected note should not show third line, got %q", view)
+	}
+	if !strings.Contains(view, "first line") {
+		t.Errorf("selected note should show first line, got %q", view)
 	}
 }
 

@@ -26,15 +26,15 @@ type notesModel struct {
 	height         int
 	focused        bool
 	confirmDelete bool // true when showing delete confirmation prompt
-	loadedIndex   int  // index of note with body loaded, -1 = none
 }
 
 func newNotes(notes []model.Note, s *store.Store) notesModel {
-	return notesModel{
-		notes:       notes,
-		store:       s,
-		loadedIndex: -1,
+	m := notesModel{
+		notes: notes,
+		store: s,
 	}
+	m = m.loadAllBodies()
+	return m
 }
 
 func (m notesModel) SetSize(w, h int) notesModel {
@@ -75,7 +75,6 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 		return m, func() tea.Msg { return enterEditorMsg{} }
 	case "e", "enter":
 		if len(m.notes) > 0 {
-			m = m.ensureBodyLoaded()
 			note := m.notes[m.cursor]
 			return m, func() tea.Msg {
 				return enterEditorMsg{name: note.Name, body: note.Body}
@@ -106,14 +105,14 @@ func (m notesModel) View() string {
 		visibleLines = 1
 	}
 
-	// Render notes with variable line heights
+	// Render notes with fixed line heights
 	linesUsed := 0
 	for i := m.scrollOffset; i < len(m.notes) && linesUsed < visibleLines; i++ {
 		note := m.notes[i]
 		selected := i == m.cursor && m.focused
 
 		header := m.noteHeaderText(note)
-		lines := m.noteLines(note, selected, visibleLines-linesUsed)
+		lines := m.noteLines(note)
 
 		// Header line
 		headerLine := noteHeader.Render(header)
@@ -194,49 +193,26 @@ func (m notesModel) noteHeaderText(note model.Note) string {
 	return note.Name
 }
 
-// noteLines returns the body preview lines for a note.
-// Selected notes show full body; others show first 2 lines truncated.
-func (m notesModel) noteLines(note model.Note, selected bool, maxLines int) []string {
+// noteLines returns the first line of the note body, truncated.
+// Always shows exactly one line regardless of selection state.
+func (m notesModel) noteLines(note model.Note) []string {
 	_, body, _ := splitHeadingAndBody(note.Body)
 	if body == "" {
 		return nil
 	}
 
-	allLines := strings.Split(body, "\n")
-
-	if selected {
-		// Show full body, up to available lines
-		limit := maxLines - 1 // -1 for header already counted
-		if limit > len(allLines) {
-			limit = len(allLines)
-		}
-		result := make([]string, limit)
-		for i := 0; i < limit; i++ {
-			result[i] = truncate(allLines[i], m.width)
-		}
-		return result
+	firstLine := strings.SplitN(body, "\n", 2)[0]
+	line := truncate(firstLine, m.width)
+	if strings.Contains(body, "\n") {
+		line = truncate(firstLine, m.width-1) + "…"
 	}
-
-	// Collapsed: show first 2 lines
-	limit := 2
-	if limit > len(allLines) {
-		limit = len(allLines)
-	}
-	result := make([]string, limit)
-	for i := 0; i < limit; i++ {
-		result[i] = truncate(allLines[i], m.width)
-	}
-	if len(allLines) > 2 {
-		result[limit-1] = truncate(allLines[limit-1], m.width-1) + "…"
-	}
-	return result
+	return []string{line}
 }
 
 // moveCursor moves the cursor by delta, clamps, and adjusts scroll.
 func (m notesModel) moveCursor(delta int) notesModel {
 	m.cursor += delta
 	m = m.clampCursor()
-	m = m.ensureBodyLoaded()
 	m = m.adjustScroll()
 	return m
 }
@@ -257,25 +233,14 @@ func (m notesModel) clampCursor() notesModel {
 }
 
 // noteHeight returns the number of terminal lines a note occupies.
-// 1 for the header + preview lines (2 for collapsed, full body for selected).
+// 1 for header only (no body), 2 for header + 1 body line.
 func (m notesModel) noteHeight(idx int) int {
 	note := m.notes[idx]
-	selected := idx == m.cursor
-	h := 1 // header
 	_, body, _ := splitHeadingAndBody(note.Body)
 	if body == "" {
-		return h
+		return 1
 	}
-	lines := strings.Count(body, "\n") + 1
-	if selected {
-		h += lines
-	} else {
-		if lines > 2 {
-			lines = 2
-		}
-		h += lines
-	}
-	return h
+	return 2
 }
 
 // availableLines returns the number of lines available for note rendering.
@@ -328,23 +293,22 @@ func (m notesModel) adjustScroll() notesModel {
 	return m
 }
 
-// ensureBodyLoaded lazily loads the selected note's body from disk.
-func (m notesModel) ensureBodyLoaded() notesModel {
-	if m.loadedIndex == m.cursor || len(m.notes) == 0 || m.store == nil {
+// loadAllBodies loads the body of every note from disk.
+func (m notesModel) loadAllBodies() notesModel {
+	if m.store == nil {
 		return m
 	}
-	note := m.notes[m.cursor]
-	if note.Body != "" {
-		m.loadedIndex = m.cursor
-		return m
+	for i := range m.notes {
+		if m.notes[i].Body != "" {
+			continue
+		}
+		loaded, err := m.store.LoadNote(m.notes[i].Name)
+		if err != nil {
+			log.Printf("wtpad: failed to load note %s: %v", m.notes[i].Name, err)
+			continue
+		}
+		m.notes[i].Body = loaded.Body
 	}
-	loaded, err := m.store.LoadNote(note.Name)
-	if err != nil {
-		log.Printf("wtpad: failed to load note %s: %v", note.Name, err)
-		return m
-	}
-	m.notes[m.cursor].Body = loaded.Body
-	m.loadedIndex = m.cursor
 	return m
 }
 
@@ -360,7 +324,6 @@ func (m notesModel) deleteSelected() notesModel {
 	}
 	m.notes = append(m.notes[:m.cursor], m.notes[m.cursor+1:]...)
 	m = m.clampCursor()
-	m.loadedIndex = -1
 	m = m.adjustScroll()
 	return m
 }
@@ -368,8 +331,8 @@ func (m notesModel) deleteSelected() notesModel {
 // SetNotes replaces the notes slice (used after editor saves a new/updated note).
 func (m notesModel) SetNotes(notes []model.Note) notesModel {
 	m.notes = notes
+	m = m.loadAllBodies()
 	m = m.clampCursor()
-	m.loadedIndex = -1
 	m = m.adjustScroll()
 	return m
 }
