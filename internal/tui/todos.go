@@ -8,6 +8,7 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/bvalentino/wtpad/internal/model"
 	"github.com/bvalentino/wtpad/internal/store"
@@ -26,6 +27,9 @@ func clearStatusAfter(d time.Duration) tea.Cmd {
 type enterInputMsg struct{}
 type exitInputMsg struct{}
 
+// todoPrefixWidth is the display width of the checkbox prefix ("○ " / "✓ ").
+var todoPrefixWidth = lipgloss.Width("○ ")
+
 type todosModel struct {
 	todos        []model.Todo
 	store        *store.Store
@@ -33,6 +37,7 @@ type todosModel struct {
 	scrollOffset int
 	width        int
 	height       int
+	textWidth    int // available columns for todo text (width minus prefix)
 	focused      bool
 	inputActive  bool
 	input        textinput.Model
@@ -58,7 +63,12 @@ func newTodos(todos []model.Todo, s *store.Store) todosModel {
 func (m todosModel) SetSize(w, h int) todosModel {
 	m.width = w
 	m.height = h
+	m.textWidth = w - todoPrefixWidth
+	if m.textWidth < 1 {
+		m.textWidth = 1
+	}
 	m.input.Width = w - 4 // leave room for prompt and padding
+	m = m.adjustScroll()
 	return m
 }
 
@@ -181,6 +191,7 @@ func (m todosModel) View() string {
 	// Track whether we've rendered the hint + divider between open and done.
 	hintRendered := false
 	prevWasOpen := false
+	indent := strings.Repeat(" ", todoPrefixWidth)
 
 	for i := m.scrollOffset; i < len(m.todos) && linesUsed < visibleLines; i++ {
 		todo := m.todos[i]
@@ -232,28 +243,52 @@ func (m todosModel) View() string {
 			b.WriteString("\n")
 		}
 
-		// Render the todo line.
+		// Render the todo line(s) with wrapping.
 		var prefix string
 		if todo.Done {
 			prefix = "✓ "
 		} else {
 			prefix = "○ "
 		}
-		line := prefix + todo.Text
-		line = truncate(line, m.width)
 
+		wrapped := wrapText(todo.Text, m.textWidth)
 		selected := i == m.cursor && m.focused
+
+		// Pick style once — same for all wrapped lines of this item.
+		var style lipgloss.Style
+		styled := false
 		switch {
 		case todo.Done && selected:
-			line = todoDoneSelected.Render(line)
+			style = todoDoneSelected
+			styled = true
 		case todo.Done:
-			line = todoDone.Render(line)
+			style = todoDone
+			styled = true
 		case selected:
-			line = todoSelected.Render(line)
+			style = todoSelected
+			styled = true
 		}
 
-		b.WriteString(line)
-		linesUsed++
+		for li, wl := range wrapped {
+			if linesUsed >= visibleLines {
+				break
+			}
+			var line string
+			if li == 0 {
+				line = prefix + wl
+			} else {
+				// Continuation lines: newline + indent
+				b.WriteString("\n")
+				line = indent + wl
+			}
+
+			if styled {
+				line = style.Render(line)
+			}
+
+			b.WriteString(line)
+			linesUsed++
+		}
 		prevWasOpen = !todo.Done
 	}
 
@@ -316,7 +351,9 @@ func (m todosModel) availableLines() int {
 }
 
 // linesUpTo counts rendered lines from scrollOffset through targetIdx,
-// mirroring the View() line-accounting logic.
+// mirroring the View() line-accounting logic (blank lines, hint/divider,
+// wrapped item heights). Must stay in sync with View() — any change to
+// spacing or wrapping in View() must be reflected here.
 func (m todosModel) linesUpTo(targetIdx int) int {
 	linesUsed := 0
 	prevWasOpen := false
@@ -344,8 +381,8 @@ func (m todosModel) linesUpTo(targetIdx int) int {
 
 		// Newline before item is a terminator (no count).
 
-		// The item itself.
-		linesUsed++
+		// The item itself — may occupy multiple lines when wrapped.
+		linesUsed += len(wrapText(todo.Text, m.textWidth))
 		prevWasOpen = !todo.Done
 	}
 
@@ -452,6 +489,74 @@ func truncate(s string, width int) string {
 		return string(r[:width])
 	}
 	return string(r[:width-1]) + "…"
+}
+
+// wrapText splits text into lines of at most width display columns.
+// Word-wraps at spaces when possible; hard-breaks if a single word exceeds width.
+// Returns a single-element slice with the original text if it fits within width.
+func wrapText(text string, width int) []string {
+	if width <= 0 {
+		return []string{""}
+	}
+	if lipgloss.Width(text) <= width {
+		return []string{text}
+	}
+
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{""}
+	}
+
+	var lines []string
+	var current string
+
+	for _, word := range words {
+		wordW := lipgloss.Width(word)
+
+		// Word itself exceeds width — hard-break it.
+		if wordW > width {
+			// Flush current line if non-empty.
+			if current != "" {
+				lines = append(lines, current)
+				current = ""
+			}
+			// Break the word into chunks of width.
+			runes := []rune(word)
+			for len(runes) > 0 {
+				chunk := ""
+				for len(runes) > 0 {
+					candidate := chunk + string(runes[0])
+					if lipgloss.Width(candidate) > width {
+						break
+					}
+					chunk = candidate
+					runes = runes[1:]
+				}
+				if chunk == "" && len(runes) > 0 {
+					// Single rune wider than width — take it anyway to avoid infinite loop.
+					chunk = string(runes[0])
+					runes = runes[1:]
+				}
+				lines = append(lines, chunk)
+			}
+			continue
+		}
+
+		if current == "" {
+			current = word
+		} else if lipgloss.Width(current+" "+word) <= width {
+			current += " " + word
+		} else {
+			lines = append(lines, current)
+			current = word
+		}
+	}
+
+	if current != "" {
+		lines = append(lines, current)
+	}
+
+	return lines
 }
 
 // Init satisfies the tea.Model interface for standalone use.
