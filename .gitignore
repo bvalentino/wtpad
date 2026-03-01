@@ -22,6 +22,9 @@ coverage.html
 *.swp
 *.swo
 
+# Claude
+.claude/todos/
+
 # Environment
 .env
 .env.local
