@@ -111,6 +111,16 @@ func (m notesModel) View() string {
 		header := m.noteHeaderText(note)
 		lines := m.noteLines(note)
 
+		// Blank line between notes for breathing room.
+		if linesUsed > 0 && linesUsed < visibleLines {
+			b.WriteString("\n")
+			linesUsed++
+		}
+
+		if linesUsed >= visibleLines {
+			break
+		}
+
 		// Header line
 		headerLine := noteHeader.Render(header)
 		if selected {
@@ -270,6 +280,9 @@ func (m notesModel) adjustScroll() notesModel {
 		cursorVisible := false
 		for i := m.scrollOffset; i < len(m.notes); i++ {
 			h := m.noteHeight(i)
+			if i > m.scrollOffset {
+				h++ // blank spacer line between notes
+			}
 			if used+h > avail && i > m.scrollOffset {
 				break
 			}
@@ -293,7 +306,11 @@ func (m notesModel) adjustScroll() notesModel {
 	for m.scrollOffset > 0 {
 		used := 0
 		for i := m.scrollOffset - 1; i < len(m.notes); i++ {
-			used += m.noteHeight(i)
+			h := m.noteHeight(i)
+			if i > m.scrollOffset-1 {
+				h++ // blank spacer line between notes
+			}
+			used += h
 		}
 		if used > avail {
 			break
