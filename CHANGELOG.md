@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Wrap long lines in note viewer to stay within overlay borders
+- Place cursor at end of text when editing a todo
 
 ## [0.1.2] - 2026-03-02
 

@@ -151,6 +151,7 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 	case "enter":
 		if len(m.todos) > 0 {
 			m.input.SetValue(m.todos[m.cursor].Text)
+			m.input.CursorEnd() // SetValue preserves stale cursor position; force to end
 			m.input.Focus()
 			m.inputActive = true
 			m.editIndex = m.cursor
