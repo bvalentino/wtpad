@@ -224,72 +224,61 @@ func (a App) renderHeader() string {
 }
 
 // renderTabStrip returns the 3-line tab chrome.
+// Lines 1-2 (top border + label) are rendered by lipgloss borders.
+// Line 3 (connection to content area) is manually constructed so that
+// the tab opening flows seamlessly into the content box.
 func (a App) renderTabStrip() string {
-	todoLabel := " Todo (t) "
-	noteLabel := " Notes (n) "
-	w := a.width
+	todoLabel := "Todo (t)"
+	noteLabel := "Notes (n)"
 
+	var todoTab, noteTab string
 	if a.activeTab == tabTodos {
-		return a.renderTabStripLeft(todoLabel, noteLabel, w)
+		todoTab = activeTabStyle.Render(todoLabel)
+		noteTab = inactiveTabStyle.Render(noteLabel)
+	} else {
+		todoTab = inactiveTabStyle.Render(todoLabel)
+		noteTab = activeTabStyle.Render(noteLabel)
 	}
-	return a.renderTabStripRight(todoLabel, noteLabel, w)
-}
 
-// renderTabStripLeft renders tab strip with the left tab (Todos) active.
-func (a App) renderTabStripLeft(activeLabel, inactiveLabel string, w int) string {
-	activeLabelWidth := lipgloss.Width(activeLabel)
-	inactiveLabelDisplay := tabInactive.Render(inactiveLabel)
+	// Lines 1-2: join the two tabs (each 2 lines: top border + label row)
+	row := lipgloss.JoinHorizontal(lipgloss.Top, todoTab, noteTab)
 
-	// Line 1: ┌──────────┐
-	line1Top := "┌" + strings.Repeat("─", activeLabelWidth) + "┐"
-
-	// Line 2: │ Todo (t) │ Notes (n)
-	line2 := "│" + tabActive.Render(activeLabel) + "│ " + inactiveLabelDisplay
-
-	// Line 3: │          └───────────┐
-	// Width: "│" (1) + spaces (activeLabelWidth) + "└" (1) + dashes + "┐" (1) = w
-	remaining := w - activeLabelWidth - 3
-	if remaining < 0 {
-		remaining = 0
+	// Pad lines 1-2 to terminal width
+	rowLines := strings.Split(row, "\n")
+	for i, l := range rowLines {
+		if pad := a.width - lipgloss.Width(l); pad > 0 {
+			rowLines[i] = l + strings.Repeat(" ", pad)
+		}
 	}
-	line3 := "│" + strings.Repeat(" ", activeLabelWidth) + "└" + strings.Repeat("─", remaining) + "┐"
 
-	return line1Top + "\n" + line2 + "\n" + line3
-}
+	// Line 3: content top border with opening under the active tab.
+	// Each tab's display width includes left border (1) + padding (1) +
+	// label + padding (1) + right border (1). Inner width = displayW - 2.
+	todoW := lipgloss.Width(todoTab)
+	noteW := lipgloss.Width(noteTab)
+	todoInner := todoW - 2
+	noteInner := noteW - 2
 
-// renderTabStripRight renders tab strip with the right tab (Notes) active.
-func (a App) renderTabStripRight(inactiveLabel, activeLabel string, w int) string {
-	activeLabelWidth := lipgloss.Width(activeLabel)
-	inactiveLabelDisplay := tabInactive.Render(inactiveLabel)
-	inactiveLabelWidth := lipgloss.Width(inactiveLabelDisplay)
-
-	// Position: inactive label on left, then active tab box on right
-	// The active tab box starts after the inactive label + spacing
-	leftPad := inactiveLabelWidth + 2 // leading " " + label + " " before │
-
-	// Line 1: spaces + ┌──────────┐
-	line1 := strings.Repeat(" ", leftPad) + "┌" + strings.Repeat("─", activeLabelWidth) + "┐"
-
-	// Line 2: " Todo (t) │ Notes (n)│"
-	line2 := " " + inactiveLabelDisplay + " │" + tabActive.Render(activeLabel) + "│"
-
-	// Line 3: ┌────────────┘           └─────────────────────┐
-	// ┘ aligns with left │ of tab box, └ aligns with right │
-	// Content top border wraps around the tab opening.
-	// "┌" (1) + dashes (leftPad-1) + "┘" (1) + spaces (activeLabelWidth) + "└" (1) + dashes + "┐" (1) = w
-	leftFill := leftPad - 1
-	if leftFill < 0 {
-		leftFill = 0
+	gapFill := a.width - todoW - noteW - 1 // -1 for the ╮ at right edge
+	if gapFill < 0 {
+		gapFill = 0
 	}
-	rightFill := w - leftPad - activeLabelWidth - 3 // -3 for ┘, └, ┐
-	if rightFill < 0 {
-		rightFill = 0
-	}
-	line3 := "┌" + strings.Repeat("─", leftFill) + "┘" +
-		strings.Repeat(" ", activeLabelWidth) +
-		"└" + strings.Repeat("─", rightFill) + "┐"
 
-	return line1 + "\n" + line2 + "\n" + line3
+	var line3 string
+	if a.activeTab == tabTodos {
+		// │<spaces>╰┴<dashes>┴<dashes>╮
+		line3 = "│" + strings.Repeat(" ", todoInner) +
+			"╰┴" + strings.Repeat("─", noteInner) + "┴" +
+			strings.Repeat("─", gapFill) + "╮"
+	} else {
+		// ├<dashes>┴╯<spaces>╰<dashes>╮
+		line3 = "├" + strings.Repeat("─", todoInner) +
+			"┴╯" + strings.Repeat(" ", noteInner) + "╰" +
+			strings.Repeat("─", gapFill) + "╮"
+	}
+	line3 = dimBorder.Render(line3)
+
+	return strings.Join(rowLines, "\n") + "\n" + line3
 }
 
 // renderContent renders the active tab's content with side borders.
@@ -324,12 +313,12 @@ func (a App) renderContent() string {
 		if pad < 0 {
 			pad = 0
 		}
-		b.WriteString("│ " + line + strings.Repeat(" ", pad) + " │")
+		b.WriteString(dimBorder.Render("│") + " " + line + strings.Repeat(" ", pad) + " " + dimBorder.Render("│"))
 	}
 
 	// Bottom border
 	b.WriteString("\n")
-	b.WriteString("└" + strings.Repeat("─", a.width-2) + "┘")
+	b.WriteString(dimBorder.Render("╰" + strings.Repeat("─", a.width-2) + "╯"))
 
 	return b.String()
 }

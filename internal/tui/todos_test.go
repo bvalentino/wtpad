@@ -36,7 +36,7 @@ func TestTodosScrollDown(t *testing.T) {
 
 	// Navigate to item 5 — well past visible area
 	for i := 0; i < 5; i++ {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
 
 	if m.cursor != 5 {
@@ -48,8 +48,10 @@ func TestTodosScrollDown(t *testing.T) {
 }
 
 func TestTodosScrollDownWithDone(t *testing.T) {
-	// Mix of open and done todos. The hint/divider section between
-	// open and done takes ~5 extra lines, making scroll even more important.
+	// Mix of open and done todos. Done items are not navigable in
+	// the default (pending) view — cursor stops at the last open item.
+	// The done section + divider still occupy visual lines, so we verify
+	// scrolling advances to keep the cursor visible.
 	todos := []model.Todo{
 		{Text: "open 1"},
 		{Text: "open 2"},
@@ -59,19 +61,19 @@ func TestTodosScrollDownWithDone(t *testing.T) {
 	}
 
 	m := newTodos(todos, nil)
-	m = m.SetSize(40, 8)
+	m = m.SetSize(40, 4) // small viewport to force scrolling
 	m = m.SetFocus(true)
 
-	// Navigate to first done item (index 3)
+	// Navigate to last open item (index 2); done items are skipped.
 	for i := 0; i < 3; i++ {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
 
-	if m.cursor != 3 {
-		t.Fatalf("cursor = %d, want 3", m.cursor)
+	if m.cursor != 2 {
+		t.Fatalf("cursor = %d, want 2", m.cursor)
 	}
 	if m.scrollOffset == 0 {
-		t.Errorf("scrollOffset should have advanced for cursor=3 with hint/divider in height=8, got %d", m.scrollOffset)
+		t.Errorf("scrollOffset should have advanced for cursor=2 in height=4, got %d", m.scrollOffset)
 	}
 }
 
@@ -108,7 +110,7 @@ func TestTodosCopyYank(t *testing.T) {
 	}
 
 	// Move to second todo and yank
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
 
 	got, _ = clipboard.ReadAll()
@@ -158,13 +160,13 @@ func TestTodosScrollUpAfterDown(t *testing.T) {
 
 	// Scroll down
 	for i := 0; i < 8; i++ {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
 	savedOffset := m.scrollOffset
 
 	// Scroll back up
 	for i := 0; i < 8; i++ {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	}
 
 	if m.cursor != 0 {
@@ -257,7 +259,7 @@ func TestTodosScrollDownWithWrappedItems(t *testing.T) {
 
 	// Navigate down past the wrapped items
 	for i := 0; i < 4; i++ {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
 
 	if m.cursor != 4 {

@@ -205,7 +205,7 @@ func TestEditorRendersInsideLayout(t *testing.T) {
 	}
 
 	// Should show bottom border
-	if !strings.Contains(out, "└") {
+	if !strings.Contains(out, "╰") {
 		t.Error("editor view should contain bottom border")
 	}
 

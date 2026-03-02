@@ -79,25 +79,25 @@ func TestNotesNavigation(t *testing.T) {
 	}
 
 	// Move down
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if m.cursor != 1 {
 		t.Errorf("after j cursor = %d, want 1", m.cursor)
 	}
 
 	// Move down again
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if m.cursor != 2 {
 		t.Errorf("after j cursor = %d, want 2", m.cursor)
 	}
 
 	// Can't go past end
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if m.cursor != 2 {
 		t.Errorf("should clamp at end, cursor = %d, want 2", m.cursor)
 	}
 
 	// Move up
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	if m.cursor != 1 {
 		t.Errorf("after k cursor = %d, want 1", m.cursor)
 	}
@@ -246,8 +246,8 @@ func TestNotesScrollWithFixedHeight(t *testing.T) {
 	m = m.SetFocus(true)
 
 	// Navigate to 3rd note — should scroll since first 2 fill the viewport
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if m.cursor != 2 {
 		t.Fatalf("cursor = %d, want 2", m.cursor)
 	}

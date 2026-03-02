@@ -51,13 +51,31 @@ var (
 	helpDesc = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245"))
 
-	// Tab strip styles
-	tabActive = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("62")).
-			Bold(true)
-
-	tabInactive = lipgloss.NewStyle().
+	// Border color styles for manually constructed chrome
+	dimBorder = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
+
+	// Tab strip border (top + sides only; bottom connection line is manual)
+	tabBorder = lipgloss.Border{
+		Top:     "─",
+		Left:    "│",
+		Right:   "│",
+		TopLeft: "╭", TopRight: "╮",
+	}
+
+	// Tab strip styles (no bottom border — connection line is built in renderTabStrip)
+	activeTabStyle = lipgloss.NewStyle().
+			Border(tabBorder, true, true, false, true).
+			BorderForeground(lipgloss.Color("240")).
+			Foreground(lipgloss.Color("255")).
+			Bold(true).
+			Padding(0, 1)
+
+	inactiveTabStyle = lipgloss.NewStyle().
+				Border(tabBorder, true, true, false, true).
+				BorderForeground(lipgloss.Color("240")).
+				Foreground(lipgloss.Color("240")).
+				Padding(0, 1)
 
 	// Header style
 	headerStyle = lipgloss.NewStyle().
