@@ -201,7 +201,7 @@ func TestEditorRendersInsideLayout(t *testing.T) {
 	out := app.View()
 
 	// Editor mode should still show the tab strip
-	if !strings.Contains(out, "Todo (t)") {
+	if !strings.Contains(out, "Todo") {
 		t.Error("editor view should contain tab strip")
 	}
 
@@ -270,7 +270,7 @@ func TestToggleInProgress(t *testing.T) {
 	app = sendResize(t, app, 80, 40)
 
 	// Press 'p' to toggle first todo to in-progress
-	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	app = updated.(App)
 
 	// First open item should now be in-progress (and sorted after remaining open items)
@@ -295,7 +295,7 @@ func TestToggleInProgressOnDoneIsNoOp(t *testing.T) {
 	app = sendResize(t, app, 80, 40)
 
 	// Press 'p' on a done item — should be a no-op
-	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	app = updated.(App)
 
 	if app.todosPane.todos[0].Status != model.StatusDone {
@@ -309,8 +309,8 @@ func TestToggleDoneClearsInProgress(t *testing.T) {
 	app := New(s, tempTemplateStoreForApp(t), todos, nil, "main")
 	app = sendResize(t, app, 80, 40)
 
-	// Press 'd' to mark in-progress item as done
-	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	// Press space to mark in-progress item as done
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
 	app = updated.(App)
 
 	if app.todosPane.todos[0].Status != model.StatusDone {

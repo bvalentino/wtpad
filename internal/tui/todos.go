@@ -155,9 +155,9 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 			m.editIndex = m.cursor
 			return m, func() tea.Msg { return enterInputMsg{} }
 		}
-	case "d", " ":
+	case " ":
 		m = m.toggleDone()
-	case "p":
+	case "i":
 		m = m.toggleInProgress()
 	case "x", "delete":
 		if len(m.todos) > 0 {
@@ -781,9 +781,9 @@ func (m todosModel) ShowingCompleted() bool {
 // FooterHint returns the mode-aware hint string for the footer.
 func (m todosModel) FooterHint() string {
 	if m.showCompleted {
-		return "v back · ? help · t/n switch"
+		return "v back · ? help · tab switch"
 	}
-	return "? help · t/n switch"
+	return "? help · tab switch"
 }
 
 // Counts returns the number of todos in each status.

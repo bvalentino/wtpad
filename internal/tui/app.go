@@ -164,17 +164,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// In normal mode, handle global keys
 		if a.mode == modeNormal {
 			switch msg.String() {
-			case "t":
-				if a.activeTab != tabTodos {
-					a = a.switchTab(tabTodos)
-					return a, nil
-				}
-				// On todos tab, 't' falls through to pane
-			case "n":
-				if a.activeTab != tabNotes {
+			case "tab":
+				if a.activeTab == tabTodos {
 					a = a.switchTab(tabNotes)
-					return a, nil
+				} else {
+					a = a.switchTab(tabTodos)
 				}
+				return a, nil
 			case "?":
 				a.helpPane.width = a.width
 				a.helpPane.height = a.height
@@ -264,8 +260,8 @@ func (a App) renderHeader() string {
 // Line 3 (connection to content area) is manually constructed so that
 // the tab opening flows seamlessly into the content box.
 func (a App) renderTabStrip() string {
-	todoLabel := "Todo (t)"
-	noteLabel := "Notes (n)"
+	todoLabel := "Todo"
+	noteLabel := "Notes"
 
 	var todoTab, noteTab string
 	if a.activeTab == tabTodos {

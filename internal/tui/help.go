@@ -33,15 +33,15 @@ func (h helpModel) View() string {
 		keys []struct{ key, desc string }
 	}{
 		{"Global", []struct{ key, desc string }{
-			{"t", "Todos tab"},
+			{"Tab", "Switch tab"},
 			{"?", "Toggle this help"},
 			{"q / Ctrl+C", "Quit"},
 		}},
 		{"Todos", []struct{ key, desc string }{
 			{"↑ / ↓", "Navigate"},
 			{"a", "Add todo"},
-			{"d / Space", "Toggle done"},
-			{"p", "Toggle in progress"},
+			{"Space", "Toggle done"},
+			{"i", "Toggle in progress"},
 			{"v", "View completed"},
 			{"Enter", "Edit selected"},
 			{"J / K", "Move todo down / up"},
