@@ -128,5 +128,9 @@ func (e editorModel) View() string {
 	}
 
 	taLines := strings.Split(e.textarea.View(), "\n")
-	return renderOverlayBox("Edit Note", taLines, e.width, e.height, e.FooterHint())
+	title := "Edit Note"
+	if e.name == "" {
+		title = "New Note"
+	}
+	return renderOverlayBox(title, taLines, e.width, e.height, e.FooterHint())
 }

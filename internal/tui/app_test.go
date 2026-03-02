@@ -221,9 +221,9 @@ func TestEditorRendersFullScreen(t *testing.T) {
 		t.Error("editor view should contain footer hints")
 	}
 
-	// Should show "Edit Note" in the top border
-	if !strings.Contains(out, "Edit Note") {
-		t.Error("editor view should contain 'Edit Note' title")
+	// Should show "New Note" in the top border (name is empty = new note)
+	if !strings.Contains(out, "New Note") {
+		t.Error("editor view should contain 'New Note' title")
 	}
 }
 
