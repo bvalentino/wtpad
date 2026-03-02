@@ -71,7 +71,7 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 		m = m.moveCursor(1)
 	case "up":
 		m = m.moveCursor(-1)
-	case "n", "a":
+	case "a":
 		return m, func() tea.Msg { return enterEditorMsg{} }
 	case "e", "enter":
 		if len(m.notes) > 0 {

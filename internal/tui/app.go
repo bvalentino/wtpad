@@ -143,12 +143,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return a, nil
 				}
 				// On todos tab, 't' falls through to pane
-			case "n":
-				if a.activeTab != tabNotes {
-					a = a.switchTab(tabNotes)
-					return a, nil
-				}
-				// On notes tab, 'n' falls through to pane (new note)
 			case "?":
 				a.helpPane.width = a.width
 				a.helpPane.height = a.height
