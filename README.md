@@ -17,15 +17,23 @@ When working across multiple worktrees simultaneously (tmux, cmux), context swit
 ## Install
 
 ```bash
-go install github.com/yourname/wtpad@latest
+go install github.com/bvalentino/wtpad@latest
 ```
+
+This places the binary in `$GOPATH/bin` (usually `~/go/bin`), which should be on your `PATH`. To update later, run the same command again.
 
 Or build from source:
 
 ```bash
-git clone https://github.com/yourname/wtpad
+git clone https://github.com/bvalentino/wtpad
 cd wtpad
 go build -o wtpad .
+```
+
+To make it available everywhere, symlink the binary to a directory on your `PATH`:
+
+```bash
+ln -s "$(pwd)/wtpad" /usr/local/bin/wtpad
 ```
 
 ## Usage
@@ -64,7 +72,25 @@ Everything is stored as plain markdown in `.wtpad/` in your current directory:
 
 Files are human-readable and editable with any text editor. On first run, `wtpad` adds `.wtpad/` to `.git/info/exclude` so it stays local to the worktree and is never committed.
 
-## Requirements
+## Development
+
+### Requirements
 
 - Go 1.21+
 - macOS or Linux
+
+### Build & test
+
+```bash
+go build -o wtpad .   # build binary
+go test ./...         # run all tests
+```
+
+### Releasing
+
+`go install github.com/bvalentino/wtpad@latest` resolves the latest **tagged** release. After merging changes to `main`, tag a new version for them to be installable:
+
+```bash
+git tag v0.x.x
+git push origin v0.x.x
+```
