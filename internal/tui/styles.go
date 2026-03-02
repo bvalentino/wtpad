@@ -105,11 +105,9 @@ func renderOverlayBox(title string, bodyLines []string, width, height int, foote
 }
 
 var (
-	selectionBg = lipgloss.Color("236")
-
-	// Todo pane styles — one per status, selection bg composed at render time.
+	// Todo pane styles — one per status, selection composed at render time.
 	todoSelected = lipgloss.NewStyle().
-			Background(selectionBg)
+			Reverse(true)
 
 	todoDone = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")).
@@ -120,7 +118,7 @@ var (
 
 	// Note pane styles
 	noteSelected = lipgloss.NewStyle().
-			Background(selectionBg)
+			Reverse(true)
 
 	noteHeader = lipgloss.NewStyle().
 			Bold(true).
@@ -199,5 +197,5 @@ var (
 			Foreground(lipgloss.Color("62"))
 
 	templateSelected = lipgloss.NewStyle().
-				Background(selectionBg)
+				Reverse(true)
 )

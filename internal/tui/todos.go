@@ -315,7 +315,7 @@ func (m todosModel) View() string {
 			styled = true
 		}
 		if selected {
-			style = style.Background(selectionBg)
+			style = style.Reverse(true)
 			styled = true
 		}
 
