@@ -344,14 +344,14 @@ func TestTodosPurgeConfirmCancel(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press D — should enter purge confirmation
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
+	// Press X — should enter purge confirmation
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	if m.confirm != confirmPurge {
-		t.Fatal("expected confirm == confirmPurge after 'D'")
+		t.Fatal("expected confirm == confirmPurge after 'X'")
 	}
 
 	view := m.View()
-	if !strings.Contains(view, "Purge completed?") {
+	if !strings.Contains(view, "Clear all open todos?") {
 		t.Errorf("view should show purge confirmation, got %q", view)
 	}
 
@@ -377,17 +377,17 @@ func TestTodosPurgeConfirm(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press D then y to confirm purge
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
+	// Press X then y to confirm purge of open todos
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
 	if m.confirm != confirmNone {
 		t.Error("confirm should be confirmNone after confirmation")
 	}
-	if len(m.todos) != 1 {
-		t.Errorf("expected 1 todo after purge, got %d", len(m.todos))
+	if len(m.todos) != 2 {
+		t.Errorf("expected 2 done todos after purge, got %d", len(m.todos))
 	}
-	if m.todos[0].Text != "open" {
+	if m.todos[0].Text != "done1" {
 		t.Errorf("wrong todo remaining: %q", m.todos[0].Text)
 	}
 }
@@ -632,7 +632,7 @@ func TestPurgeSwitchesBackToPendingView(t *testing.T) {
 	}
 
 	// Purge done items
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
 	if m.showCompleted {

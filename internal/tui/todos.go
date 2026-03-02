@@ -118,12 +118,13 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 			case confirmDelete:
 				m = m.deleteCurrent()
 			case confirmPurge:
-				m = m.purgeDone()
-				// Switch back to pending view after purging all done items.
 				if m.showCompleted {
+					m = m.purgeDone()
 					m.showCompleted = false
 					m = m.snapCursor()
 					m = m.adjustScroll()
+				} else {
+					m = m.purgeOpen()
 				}
 			}
 		default:
@@ -167,7 +168,7 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		m = m.moveTodo(1)
 	case "K":
 		m = m.moveTodo(-1)
-	case "D":
+	case "X":
 		m.confirm = confirmPurge
 	case "v":
 		m.showCompleted = !m.showCompleted
@@ -350,8 +351,10 @@ func (m todosModel) View() string {
 		bar.WriteString(m.input.View())
 	case m.confirm == confirmDelete:
 		bar.WriteString(noteConfirm.Render("Delete todo? (y to confirm)"))
-	case m.confirm == confirmPurge:
-		bar.WriteString(noteConfirm.Render("Purge completed? (y to confirm)"))
+	case m.confirm == confirmPurge && m.showCompleted:
+		bar.WriteString(noteConfirm.Render("Clear all completed? (y to confirm)"))
+	case m.confirm == confirmPurge && !m.showCompleted:
+		bar.WriteString(noteConfirm.Render("Clear all open todos? (y to confirm)"))
 	case !m.showCompleted:
 		bar.WriteString(hintStyle.Render("Add Todo (a)"))
 	}
@@ -606,6 +609,21 @@ func (m todosModel) purgeDone() todosModel {
 	filtered := make([]model.Todo, 0, len(m.todos))
 	for _, t := range m.todos {
 		if t.Status != model.StatusDone {
+			filtered = append(filtered, t)
+		}
+	}
+	m.todos = filtered
+	m = m.snapCursor()
+	m = m.adjustScroll()
+	m.save()
+	return m
+}
+
+// purgeOpen removes all non-done todos and saves.
+func (m todosModel) purgeOpen() todosModel {
+	filtered := make([]model.Todo, 0, len(m.todos))
+	for _, t := range m.todos {
+		if t.Status == model.StatusDone {
 			filtered = append(filtered, t)
 		}
 	}

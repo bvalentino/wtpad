@@ -46,7 +46,7 @@ func (h helpModel) View() string {
 			{"Enter", "Edit selected"},
 			{"J / K", "Move todo down / up"},
 			{"x", "Delete selected"},
-			{"D", "Delete all completed"},
+			{"X", "Clear all in view"},
 			{"c", "Copy selected"},
 			{"T", "Import template"},
 			{"S", "Save as template"},
