@@ -1,6 +1,108 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Overlay box layout constants.
+const (
+	overlayBorderWidth = 2 // left + right │
+	overlayPadWidth    = 2 // 1 space after each │
+	overlayBoxChrome   = overlayBorderWidth + overlayPadWidth
+	overlayBoxLines    = 2 // top border + bottom border
+)
+
+// overlayContentWidth returns the usable width inside the overlay box.
+func overlayContentWidth(termWidth int) int {
+	w := termWidth - overlayBoxChrome
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// overlayTopBorder builds ╭─── Title ───╮ with the title centered.
+func overlayTopBorder(title string, width int) string {
+	styled := overlayTitle.Render(title)
+	titleW := lipgloss.Width(styled)
+
+	// Available space for dashes: width minus ╭, ╮, and the styled title with surrounding spaces.
+	inner := width - 2 // excluding ╭ and ╮
+	if titleW == 0 {
+		fill := inner
+		if fill < 0 {
+			fill = 0
+		}
+		return dimBorder.Render("╭" + strings.Repeat("─", fill) + "╮")
+	}
+
+	// " Title " with a space on each side of the styled text
+	decorated := " " + styled + " "
+	decoratedW := titleW + 2
+
+	dashSpace := inner - decoratedW
+	if dashSpace < 0 {
+		dashSpace = 0
+	}
+	left := dashSpace / 2
+	right := dashSpace - left
+
+	return dimBorder.Render("╭"+strings.Repeat("─", left)) +
+		decorated +
+		dimBorder.Render(strings.Repeat("─", right)+"╮")
+}
+
+// overlayBottomBorder builds ╰──────╯ at the given width.
+func overlayBottomBorder(width int) string {
+	fill := width - 2
+	if fill < 0 {
+		fill = 0
+	}
+	return dimBorder.Render("╰" + strings.Repeat("─", fill) + "╯")
+}
+
+// overlayContentLine wraps a single line with │ borders and padding.
+func overlayContentLine(line string, contentWidth int) string {
+	lineW := lipgloss.Width(line)
+	pad := contentWidth - lineW
+	if pad < 0 {
+		pad = 0
+	}
+	return dimBorder.Render("│") + " " + line + strings.Repeat(" ", pad) + " " + dimBorder.Render("│")
+}
+
+// overlayContentHeight returns the number of content lines inside an overlay box.
+func overlayContentHeight(termHeight int) int {
+	h := termHeight - overlayBoxLines - 1 // top border + bottom border + footer
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+// renderOverlayBox assembles a bordered overlay: top border, content lines, bottom border, footer.
+func renderOverlayBox(title string, bodyLines []string, width, height int, footer string) string {
+	cw := overlayContentWidth(width)
+	contentH := overlayContentHeight(height)
+
+	parts := make([]string, 0, contentH+3)
+	parts = append(parts, overlayTopBorder(title, width))
+
+	for i := 0; i < contentH; i++ {
+		line := ""
+		if i < len(bodyLines) {
+			line = bodyLines[i]
+		}
+		parts = append(parts, overlayContentLine(line, cw))
+	}
+
+	parts = append(parts, overlayBottomBorder(width))
+	parts = append(parts, footerStyle.Render(footer))
+
+	return strings.Join(parts, "\n")
+}
 
 var (
 	selectionBg = lipgloss.Color("236")
@@ -31,15 +133,13 @@ var (
 			Foreground(lipgloss.Color("196")).
 			Bold(true)
 
-	// Editor overlay styles
-	editorHeader = lipgloss.NewStyle().
+	// Overlay title style (rendered inside the top border)
+	overlayTitle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("62"))
 
-	// Help overlay styles
-	helpTitle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("62"))
+	// Help overlay styles (same as overlay title)
+	helpTitle = overlayTitle
 
 	helpSection = lipgloss.NewStyle().
 			Bold(true).

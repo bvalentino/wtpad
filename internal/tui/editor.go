@@ -3,7 +3,7 @@ package tui
 import (
 	"fmt"
 	"log"
-	"time"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,10 +11,11 @@ import (
 	"github.com/bvalentino/wtpad/internal/store"
 )
 
-const noteTimeFmt = "20060102-150405"
-
 // saveNoteMsg signals root that the editor saved a note successfully.
-type saveNoteMsg struct{ name string }
+type saveNoteMsg struct {
+	name string
+	body string
+}
 
 // exitEditorMsg signals root to leave editor mode without saving.
 type exitEditorMsg struct{}
@@ -35,6 +36,7 @@ func newEditorModel(s *store.Store) editorModel {
 	ta.Placeholder = "Start writing..."
 	ta.CharLimit = 0 // no limit
 	ta.ShowLineNumbers = false
+	ta.Prompt = ""
 	return editorModel{
 		textarea: ta,
 		store:    s,
@@ -42,7 +44,6 @@ func newEditorModel(s *store.Store) editorModel {
 }
 
 // openEditor prepares the editor for a new or existing note.
-// w and h are the content area dimensions (already excluding app chrome).
 func (e editorModel) openEditor(name, body string, w, h int) editorModel {
 	e.name = name
 	e.initialBody = body
@@ -53,16 +54,12 @@ func (e editorModel) openEditor(name, body string, w, h int) editorModel {
 	return e.resize(w, h)
 }
 
-// resize updates the editor dimensions to fit within the content area.
+// resize updates the editor dimensions accounting for the overlay box.
 func (e editorModel) resize(w, h int) editorModel {
 	e.width = w
 	e.height = h
-	e.textarea.SetWidth(w)
-	taHeight := h - 1 // minus header line
-	if taHeight < 1 {
-		taHeight = 1
-	}
-	e.textarea.SetHeight(taHeight)
+	e.textarea.SetWidth(overlayContentWidth(w))
+	e.textarea.SetHeight(overlayContentHeight(h))
 	return e
 }
 
@@ -106,14 +103,14 @@ func (e editorModel) save() (editorModel, tea.Cmd) {
 		e.err = err
 		return e, nil
 	}
-	return e, func() tea.Msg { return saveNoteMsg{name: name} }
+	return e, func() tea.Msg { return saveNoteMsg{name: name, body: body} }
 }
 
 func (e editorModel) dirty() bool {
 	return e.textarea.Value() != e.initialBody
 }
 
-// FooterHint returns the contextual hint for the app footer.
+// FooterHint returns the contextual hint for the editor overlay.
 func (e editorModel) FooterHint() string {
 	switch {
 	case e.err != nil:
@@ -126,15 +123,10 @@ func (e editorModel) FooterHint() string {
 }
 
 func (e editorModel) View() string {
-	header := "New Note"
-	if e.name != "" {
-		if t, err := time.Parse(noteTimeFmt, e.name); err == nil {
-			header = fmt.Sprintf("Editing — %s", t.Format("Jan 02 15:04"))
-		} else {
-			header = fmt.Sprintf("Editing — %s", e.name)
-		}
+	if e.width == 0 || e.height == 0 {
+		return ""
 	}
-	headerLine := editorHeader.Render(header)
 
-	return headerLine + "\n" + e.textarea.View()
+	taLines := strings.Split(e.textarea.View(), "\n")
+	return renderOverlayBox("Edit Note", taLines, e.width, e.height, e.FooterHint())
 }

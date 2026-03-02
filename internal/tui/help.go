@@ -7,12 +7,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// enterHelpMsg signals root to enter help mode from an overlay.
+type enterHelpMsg struct{}
+
 // exitHelpMsg signals root to leave help mode.
 type exitHelpMsg struct{}
 
 type helpModel struct {
 	width  int
 	height int
+}
+
+func (m helpModel) resize(w, h int) helpModel {
+	m.width = w
+	m.height = h
+	return m
 }
 
 func (h helpModel) Update(msg tea.Msg) (helpModel, tea.Cmd) {
@@ -54,12 +63,14 @@ func (h helpModel) View() string {
 		{"Notes", []struct{ key, desc string }{
 			{"↑ / ↓", "Navigate"},
 			{"a", "New note"},
-			{"e / Enter", "Edit selected"},
+			{"Enter", "View selected"},
+			{"e", "Edit selected"},
 			{"x", "Delete selected"},
 		}},
-		{"Editor", []struct{ key, desc string }{
-			{"Ctrl+S", "Save"},
-			{"Esc", "Discard / close"},
+		{"Viewer / Editor", []struct{ key, desc string }{
+			{"e", "Edit (viewer)"},
+			{"Ctrl+S", "Save (editor)"},
+			{"Esc", "Back / discard"},
 		}},
 	}
 

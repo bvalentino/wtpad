@@ -25,6 +25,7 @@ const (
 	modeNormal appMode = iota
 	modeInput
 	modeEditor
+	modeViewer
 	modeHelp
 	modeTemplate
 )
@@ -52,6 +53,8 @@ type App struct {
 	height    int
 	activeTab activeTab
 	mode      appMode
+	editorReturnMode appMode // mode to return to when exiting editor (viewer or normal)
+	helpReturnMode   appMode // mode to return to when exiting help
 
 	// Pre-computed layout dimensions (set in layoutVertical)
 	showFullHeader bool
@@ -65,6 +68,7 @@ type App struct {
 	todosPane    todosModel
 	notesPane    notesModel
 	editorPane   editorModel
+	viewerPane   viewerModel
 	helpPane     helpModel
 	templatePane templateModal
 }
@@ -96,25 +100,48 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case exitInputMsg:
 		a.mode = modeNormal
 		return a, nil
+	case enterViewerMsg:
+		m := msg.(enterViewerMsg)
+		a.viewerPane = a.viewerPane.openViewer(m.name, m.body, a.width, a.height)
+		a.mode = modeViewer
+		return a, nil
+	case exitViewerMsg:
+		a.mode = modeNormal
+		return a, nil
 	case enterEditorMsg:
 		m := msg.(enterEditorMsg)
-		a.editorPane = a.editorPane.openEditor(m.name, m.body, a.contentWidth, a.contentHeight)
+		a.editorReturnMode = a.mode
+		a.editorPane = a.editorPane.openEditor(m.name, m.body, a.width, a.height)
 		a.mode = modeEditor
 		return a, nil
 	case saveNoteMsg:
+		m := msg.(saveNoteMsg)
 		notes, err := a.store.ListNotes()
 		if err != nil {
 			log.Printf("wtpad: failed to list notes after save: %v", err)
 		} else {
 			a.notesPane = a.notesPane.SetNotes(notes)
 		}
-		a.mode = modeNormal
+		// Always open the viewer after saving
+		a.viewerPane = a.viewerPane.openViewer(m.name, m.body, a.width, a.height)
+		a.mode = modeViewer
 		return a, nil
 	case exitEditorMsg:
-		a.mode = modeNormal
+		if a.editorReturnMode == modeViewer {
+			a.mode = modeViewer
+		} else {
+			a.mode = modeNormal
+		}
+		a.editorReturnMode = modeNormal
+		return a, nil
+	case enterHelpMsg:
+		a.helpReturnMode = a.mode
+		a.helpPane = a.helpPane.resize(a.width, a.height)
+		a.mode = modeHelp
 		return a, nil
 	case exitHelpMsg:
-		a.mode = modeNormal
+		a.mode = a.helpReturnMode
+		a.helpReturnMode = modeNormal
 		return a, nil
 	case enterTemplateMsg:
 		m := msg.(enterTemplateMsg)
@@ -144,16 +171,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = msg.Width
 		a.height = msg.Height
 		a = a.layoutVertical()
-		if a.mode == modeEditor {
-			a.editorPane = a.editorPane.resize(a.contentWidth, a.contentHeight)
-		}
-		if a.mode == modeHelp {
-			a.helpPane.width = msg.Width
-			a.helpPane.height = msg.Height
-		}
-		if a.mode == modeTemplate {
-			a.templatePane = a.templatePane.resize(msg.Width, msg.Height)
-		}
+		// Resize all overlays so none hold stale dimensions when re-entered.
+		a.editorPane = a.editorPane.resize(msg.Width, msg.Height)
+		a.viewerPane = a.viewerPane.resize(msg.Width, msg.Height)
+		a.helpPane = a.helpPane.resize(msg.Width, msg.Height)
+		a.templatePane = a.templatePane.resize(msg.Width, msg.Height)
 		return a, nil
 
 	case tea.KeyMsg:
@@ -172,10 +194,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return a, nil
 			case "?":
-				a.helpPane.width = a.width
-				a.helpPane.height = a.height
-				a.mode = modeHelp
-				return a, nil
+				return a, func() tea.Msg { return enterHelpMsg{} }
 			case "q":
 				return a, tea.Quit
 			}
@@ -193,6 +212,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if a.mode == modeTemplate {
 		var cmd tea.Cmd
 		a.templatePane, cmd = a.templatePane.Update(msg)
+		return a, cmd
+	}
+
+	// Delegate to viewer when in viewer mode
+	if a.mode == modeViewer {
+		var cmd tea.Cmd
+		a.viewerPane, cmd = a.viewerPane.Update(msg)
 		return a, cmd
 	}
 
@@ -220,6 +246,12 @@ func (a App) View() string {
 	}
 	if a.mode == modeTemplate {
 		return a.templatePane.View()
+	}
+	if a.mode == modeViewer {
+		return a.viewerPane.View()
+	}
+	if a.mode == modeEditor {
+		return a.editorPane.View()
 	}
 	// Before the first WindowSizeMsg, dimensions are zero.
 	if a.width == 0 || a.height == 0 {
@@ -316,15 +348,11 @@ func (a App) renderTabStrip() string {
 // renderContent renders the active tab's content with side borders.
 func (a App) renderContent() string {
 	var content string
-	if a.mode == modeEditor {
-		content = a.editorPane.View()
-	} else {
-		switch a.activeTab {
-		case tabTodos:
-			content = a.todosPane.View()
-		case tabNotes:
-			content = a.notesPane.View()
-		}
+	switch a.activeTab {
+	case tabTodos:
+		content = a.todosPane.View()
+	case tabNotes:
+		content = a.notesPane.View()
 	}
 
 	// Split content into lines and pad/frame each with side borders
@@ -378,8 +406,6 @@ func (a App) renderFooter() string {
 	switch a.mode {
 	case modeInput:
 		hint = "enter confirm · esc cancel"
-	case modeEditor:
-		hint = a.editorPane.FooterHint()
 	case modeHelp:
 		hint = "esc close"
 	case modeTemplate:
