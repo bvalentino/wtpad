@@ -46,14 +46,15 @@ func (v viewerModel) openViewer(name, body string, w, h int) viewerModel {
 	v.scrollOffset = 0
 	v.width = w
 	v.height = h
-	v.lines = strings.Split(body, "\n")
+	v.lines = v.wrapLines(strings.Split(body, "\n"))
 	return v
 }
 
-// resize updates dimensions.
+// resize updates dimensions and re-wraps content for the new width.
 func (v viewerModel) resize(w, h int) viewerModel {
 	v.width = w
 	v.height = h
+	v.lines = v.wrapLines(strings.Split(v.rawBody, "\n"))
 	v = v.clampScroll()
 	return v
 }
@@ -114,6 +115,16 @@ func (v viewerModel) View() string {
 // FooterHint returns the contextual hint for the viewer overlay.
 func (v viewerModel) FooterHint() string {
 	return "Edit (e) · Back (esc)"
+}
+
+// wrapLines wraps each raw line to fit within the overlay content width.
+func (v viewerModel) wrapLines(raw []string) []string {
+	cw := overlayContentWidth(v.width)
+	var out []string
+	for _, line := range raw {
+		out = append(out, wrapText(line, cw)...)
+	}
+	return out
 }
 
 func (v viewerModel) clampScroll() viewerModel {

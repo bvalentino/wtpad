@@ -64,12 +64,14 @@ func overlayBottomBorder(width int) string {
 }
 
 // overlayContentLine wraps a single line with │ borders and padding.
+// Lines exceeding contentWidth are truncated as a safety backstop.
 func overlayContentLine(line string, contentWidth int) string {
 	lineW := lipgloss.Width(line)
-	pad := contentWidth - lineW
-	if pad < 0 {
-		pad = 0
+	if lineW > contentWidth {
+		line = truncate(line, contentWidth)
+		lineW = lipgloss.Width(line)
 	}
+	pad := contentWidth - lineW
 	return dimBorder.Render("│") + " " + line + strings.Repeat(" ", pad) + " " + dimBorder.Render("│")
 }
 
