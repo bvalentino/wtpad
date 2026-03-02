@@ -44,6 +44,7 @@ func (h helpModel) View() string {
 			{"d / Space", "Toggle done"},
 			{"p", "Toggle in progress"},
 			{"Enter", "Edit selected"},
+			{"J / K", "Move todo down / up"},
 			{"x", "Delete selected"},
 			{"D", "Delete all completed"},
 			{"c", "Copy selected"},

@@ -153,6 +153,10 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		if len(m.todos) > 0 {
 			m.confirm = confirmDelete
 		}
+	case "J":
+		m = m.moveTodo(1)
+	case "K":
+		m = m.moveTodo(-1)
 	case "D":
 		m.confirm = confirmPurge
 	case "c":
@@ -372,6 +376,26 @@ func (m todosModel) moveCursor(delta int) todosModel {
 	m.cursor += delta
 	m = m.clampCursor()
 	m = m.adjustScroll()
+	return m
+}
+
+// moveTodo swaps the current todo with its neighbor in the given direction
+// (+1 = down, -1 = up) within the same status group. No-op at group boundaries.
+func (m todosModel) moveTodo(delta int) todosModel {
+	if len(m.todos) == 0 {
+		return m
+	}
+	newIdx := m.cursor + delta
+	if newIdx < 0 || newIdx >= len(m.todos) {
+		return m
+	}
+	if m.todos[newIdx].Status != m.todos[m.cursor].Status {
+		return m
+	}
+	m.todos[m.cursor], m.todos[newIdx] = m.todos[newIdx], m.todos[m.cursor]
+	m.cursor = newIdx
+	m = m.adjustScroll()
+	m.save()
 	return m
 }
 

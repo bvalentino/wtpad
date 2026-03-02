@@ -390,6 +390,136 @@ func TestTodosPurgeConfirm(t *testing.T) {
 	}
 }
 
+func TestMoveTodoDown(t *testing.T) {
+	s := tempTodosStore(t)
+	todos := []model.Todo{
+		{Text: "first"},
+		{Text: "second"},
+		{Text: "third"},
+	}
+
+	m := newTodos(todos, s)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	// Cursor at 0 ("first"), press J to move it down
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+
+	if m.cursor != 1 {
+		t.Errorf("cursor = %d, want 1 (cursor follows moved item)", m.cursor)
+	}
+	if m.todos[0].Text != "second" || m.todos[1].Text != "first" {
+		t.Errorf("todos = [%q, %q, ...], want [second, first, ...]", m.todos[0].Text, m.todos[1].Text)
+	}
+
+	// Verify persisted
+	loaded, err := s.LoadTodos()
+	if err != nil {
+		t.Fatalf("LoadTodos: %v", err)
+	}
+	if loaded[0].Text != "second" || loaded[1].Text != "first" {
+		t.Errorf("persisted order wrong: [%q, %q, ...]", loaded[0].Text, loaded[1].Text)
+	}
+}
+
+func TestMoveTodoUp(t *testing.T) {
+	s := tempTodosStore(t)
+	todos := []model.Todo{
+		{Text: "first"},
+		{Text: "second"},
+		{Text: "third"},
+	}
+
+	m := newTodos(todos, s)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	// Move cursor to "third" (index 2), then press K to move up
+	m = m.moveCursor(2)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+
+	if m.cursor != 1 {
+		t.Errorf("cursor = %d, want 1", m.cursor)
+	}
+	if m.todos[1].Text != "third" || m.todos[2].Text != "second" {
+		t.Errorf("todos = [..., %q, %q], want [..., third, second]", m.todos[1].Text, m.todos[2].Text)
+	}
+}
+
+func TestMoveTodoNoopAtStatusBoundary(t *testing.T) {
+	todos := []model.Todo{
+		{Text: "in progress", Status: model.StatusInProgress},
+		{Text: "open one"},
+		{Text: "open two"},
+		{Text: "done one", Status: model.StatusDone},
+	}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	// Cursor at 0 (in-progress), J should be no-op (next item is open)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	if m.cursor != 0 {
+		t.Errorf("cursor = %d, want 0 (no-op at boundary)", m.cursor)
+	}
+	if m.todos[0].Text != "in progress" {
+		t.Errorf("item should not have moved: %q", m.todos[0].Text)
+	}
+
+	// Cursor at 1 (first open), K should be no-op (prev item is in-progress)
+	m = m.moveCursor(1)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	if m.cursor != 1 {
+		t.Errorf("cursor = %d, want 1 (no-op at boundary)", m.cursor)
+	}
+
+	// Cursor at 2 (last open), J should be no-op (next item is done)
+	m = m.moveCursor(1) // now at 2
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	if m.cursor != 2 {
+		t.Errorf("cursor = %d, want 2 (no-op at boundary)", m.cursor)
+	}
+}
+
+func TestMoveTodoNoopAtListEdges(t *testing.T) {
+	todos := []model.Todo{
+		{Text: "only open one"},
+		{Text: "only open two"},
+	}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	// K at top of list — no-op
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	if m.cursor != 0 {
+		t.Errorf("cursor = %d, want 0", m.cursor)
+	}
+
+	// J at bottom of list — no-op
+	m = m.moveCursor(1)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	if m.cursor != 1 {
+		t.Errorf("cursor = %d, want 1", m.cursor)
+	}
+}
+
+func TestMoveTodoEmptyList(t *testing.T) {
+	m := newTodos(nil, nil)
+	m = m.SetSize(40, 10)
+	m = m.SetFocus(true)
+
+	// Should not panic on empty list
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+
+	if len(m.todos) != 0 {
+		t.Errorf("expected empty list")
+	}
+}
+
 func TestViewShowsFullWrappedText(t *testing.T) {
 	longText := "buy groceries including milk eggs bread butter and cheese from the store"
 	todos := []model.Todo{{Text: longText}}
