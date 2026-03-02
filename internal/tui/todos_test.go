@@ -8,7 +8,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/bvalentino/wtpad/internal/model"
+	"github.com/bvalentino/wtpad/internal/store"
 )
+
+func tempTodosStore(t *testing.T) *store.Store {
+	t.Helper()
+	dir := t.TempDir()
+	s, err := store.New(dir)
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	return s
+}
 
 func TestTodosScrollDown(t *testing.T) {
 	// Create 10 open todos in a small viewport.
@@ -254,6 +265,128 @@ func TestTodosScrollDownWithWrappedItems(t *testing.T) {
 	}
 	if m.scrollOffset == 0 {
 		t.Errorf("scrollOffset should have advanced for wrapped items in small viewport, got %d", m.scrollOffset)
+	}
+}
+
+func TestTodosDeleteConfirmCancel(t *testing.T) {
+	todos := []model.Todo{{Text: "keep me"}}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 10)
+	m = m.SetFocus(true)
+
+	// Press x — should enter confirmation mode
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if m.confirm != confirmDelete {
+		t.Fatal("expected confirm == confirmDelete after 'x'")
+	}
+
+	// View should show confirmation text
+	view := m.View()
+	if !strings.Contains(view, "Delete todo?") {
+		t.Errorf("view should show delete confirmation, got %q", view)
+	}
+
+	// Press 'n' to cancel
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if m.confirm != confirmNone {
+		t.Error("confirmation should be cancelled")
+	}
+	if len(m.todos) != 1 {
+		t.Errorf("todo should not be deleted, got %d todos", len(m.todos))
+	}
+}
+
+func TestTodosDeleteConfirm(t *testing.T) {
+	s := tempTodosStore(t)
+	todos := []model.Todo{{Text: "delete me"}, {Text: "keep me"}}
+
+	m := newTodos(todos, s)
+	m = m.SetSize(40, 10)
+	m = m.SetFocus(true)
+
+	// Press x then y to confirm delete
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if m.confirm != confirmNone {
+		t.Error("confirm should be confirmNone after confirmation")
+	}
+	if len(m.todos) != 1 {
+		t.Errorf("expected 1 todo after delete, got %d", len(m.todos))
+	}
+	if m.todos[0].Text != "keep me" {
+		t.Errorf("wrong todo remaining: %q", m.todos[0].Text)
+	}
+}
+
+func TestTodosDeleteEmptyList(t *testing.T) {
+	m := newTodos(nil, nil)
+	m = m.SetSize(40, 10)
+	m = m.SetFocus(true)
+
+	// Press x on empty list — should not enter confirmation
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if m.confirm != confirmNone {
+		t.Error("should not enter confirmation on empty list")
+	}
+}
+
+func TestTodosPurgeConfirmCancel(t *testing.T) {
+	todos := []model.Todo{
+		{Text: "open"},
+		{Text: "done", Status: model.StatusDone},
+	}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 10)
+	m = m.SetFocus(true)
+
+	// Press D — should enter purge confirmation
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
+	if m.confirm != confirmPurge {
+		t.Fatal("expected confirm == confirmPurge after 'D'")
+	}
+
+	view := m.View()
+	if !strings.Contains(view, "Purge completed?") {
+		t.Errorf("view should show purge confirmation, got %q", view)
+	}
+
+	// Press esc to cancel
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.confirm != confirmNone {
+		t.Error("purge confirmation should be cancelled")
+	}
+	if len(m.todos) != 2 {
+		t.Errorf("todos should not be purged, got %d", len(m.todos))
+	}
+}
+
+func TestTodosPurgeConfirm(t *testing.T) {
+	s := tempTodosStore(t)
+	todos := []model.Todo{
+		{Text: "open"},
+		{Text: "done1", Status: model.StatusDone},
+		{Text: "done2", Status: model.StatusDone},
+	}
+
+	m := newTodos(todos, s)
+	m = m.SetSize(40, 10)
+	m = m.SetFocus(true)
+
+	// Press D then y to confirm purge
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if m.confirm != confirmNone {
+		t.Error("confirm should be confirmNone after confirmation")
+	}
+	if len(m.todos) != 1 {
+		t.Errorf("expected 1 todo after purge, got %d", len(m.todos))
+	}
+	if m.todos[0].Text != "open" {
+		t.Errorf("wrong todo remaining: %q", m.todos[0].Text)
 	}
 }
 

@@ -35,6 +35,15 @@ type TodoCounts struct {
 	Open, InProgress, Done int
 }
 
+// confirmKind represents which destructive action is pending confirmation.
+type confirmKind int
+
+const (
+	confirmNone   confirmKind = iota
+	confirmDelete
+	confirmPurge
+)
+
 type todosModel struct {
 	todos        []model.Todo
 	store        *store.Store
@@ -48,6 +57,7 @@ type todosModel struct {
 	input        textinput.Model
 	editIndex    int // -1 = adding new, >= 0 = editing existing
 	statusMsg    string
+	confirm      confirmKind
 }
 
 func newTodos(todos []model.Todo, s *store.Store) todosModel {
@@ -99,6 +109,23 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle delete/purge confirmation mode
+	if m.confirm != confirmNone {
+		switch keyMsg.String() {
+		case "y":
+			switch m.confirm {
+			case confirmDelete:
+				m = m.deleteCurrent()
+			case confirmPurge:
+				m = m.purgeDone()
+			}
+		default:
+			// any other key cancels
+		}
+		m.confirm = confirmNone
+		return m, nil
+	}
+
 	switch keyMsg.String() {
 	case "down":
 		m = m.moveCursor(1)
@@ -123,9 +150,11 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 	case "p":
 		m = m.toggleInProgress()
 	case "x", "delete":
-		m = m.deleteCurrent()
+		if len(m.todos) > 0 {
+			m.confirm = confirmDelete
+		}
 	case "D":
-		m = m.purgeDone()
+		m.confirm = confirmPurge
 	case "c":
 		if len(m.todos) > 0 {
 			if err := clipboard.WriteAll(m.todos[m.cursor].Text); err != nil {
@@ -180,6 +209,9 @@ func (m todosModel) View() string {
 	linesUsed := 0
 	visibleLines := m.height
 	if m.inputActive {
+		visibleLines--
+	}
+	if m.confirm != confirmNone {
 		visibleLines--
 	}
 	if visibleLines < 1 {
@@ -323,6 +355,15 @@ func (m todosModel) View() string {
 		b.WriteString(m.input.View())
 	}
 
+	switch m.confirm {
+	case confirmDelete:
+		b.WriteString("\n")
+		b.WriteString(noteConfirm.Render("Delete todo? (y to confirm)"))
+	case confirmPurge:
+		b.WriteString("\n")
+		b.WriteString(noteConfirm.Render("Purge completed? (y to confirm)"))
+	}
+
 	return b.String()
 }
 
@@ -353,6 +394,9 @@ func (m todosModel) clampCursor() todosModel {
 func (m todosModel) availableLines() int {
 	h := m.height
 	if m.inputActive {
+		h--
+	}
+	if m.confirm != confirmNone {
 		h--
 	}
 	if h < 1 {
