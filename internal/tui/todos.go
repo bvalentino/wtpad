@@ -184,6 +184,10 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 			}
 			return m, clearStatusAfter(2 * time.Second)
 		}
+	case "T":
+		return m, func() tea.Msg { return enterTemplateMsg{saving: false} }
+	case "S":
+		return m, func() tea.Msg { return enterTemplateMsg{saving: true} }
 	}
 
 	return m, nil
@@ -610,6 +614,27 @@ func (m todosModel) purgeDone() todosModel {
 	m = m.adjustScroll()
 	m.save()
 	return m
+}
+
+// ImportTodos appends the given todos to the current list, re-sorts, and saves.
+func (m todosModel) ImportTodos(todos []model.Todo) todosModel {
+	m.todos = append(m.todos, todos...)
+	m.todos = sortTodos(m.todos)
+	m = m.snapCursor()
+	m = m.adjustScroll()
+	m.save()
+	return m
+}
+
+// OpenTodos returns all non-done todos (open + in-progress).
+func (m todosModel) OpenTodos() []model.Todo {
+	var result []model.Todo
+	for _, t := range m.todos {
+		if t.Status != model.StatusDone {
+			result = append(result, t)
+		}
+	}
+	return result
 }
 
 // save persists todos to disk, logging on failure.

@@ -26,6 +26,7 @@ const (
 	modeInput
 	modeEditor
 	modeHelp
+	modeTemplate
 )
 
 // Layout constants
@@ -61,23 +62,25 @@ type App struct {
 	// Pane metadata
 	branch string
 
-	todosPane  todosModel
-	notesPane  notesModel
-	editorPane editorModel
-	helpPane   helpModel
+	todosPane    todosModel
+	notesPane    notesModel
+	editorPane   editorModel
+	helpPane     helpModel
+	templatePane templateModal
 }
 
-func New(s *store.Store, todos []model.Todo, notes []model.Note, branch string) App {
+func New(s *store.Store, ts *store.TemplateStore, todos []model.Todo, notes []model.Note, branch string) App {
 	tp := newTodos(todos, s)
 	np := newNotes(notes, s)
 	return App{
-		store:     s,
-		activeTab: tabTodos,
-		mode:      modeNormal,
-		branch:    branch,
-		todosPane: tp,
-		notesPane: np,
-		editorPane: newEditorModel(s),
+		store:        s,
+		activeTab:    tabTodos,
+		mode:         modeNormal,
+		branch:       branch,
+		todosPane:    tp,
+		notesPane:    np,
+		editorPane:   newEditorModel(s),
+		templatePane: newTemplateModal(ts),
 	}
 }
 
@@ -113,6 +116,27 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case exitHelpMsg:
 		a.mode = modeNormal
 		return a, nil
+	case enterTemplateMsg:
+		m := msg.(enterTemplateMsg)
+		a.templatePane = a.templatePane.open(m.saving, a.width, a.height)
+		a.mode = modeTemplate
+		return a, nil
+	case importTemplateMsg:
+		m := msg.(importTemplateMsg)
+		a.todosPane = a.todosPane.ImportTodos(m.todos)
+		a.mode = modeNormal
+		return a, nil
+	case saveTemplateMsg:
+		m := msg.(saveTemplateMsg)
+		openTodos := a.todosPane.OpenTodos()
+		if _, err := a.templatePane.tstore.SaveTemplate(m.name, openTodos); err != nil {
+			log.Printf("wtpad: failed to save template: %v", err)
+		}
+		a.mode = modeNormal
+		return a, nil
+	case exitTemplateMsg:
+		a.mode = modeNormal
+		return a, nil
 	}
 
 	switch msg := msg.(type) {
@@ -126,6 +150,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.mode == modeHelp {
 			a.helpPane.width = msg.Width
 			a.helpPane.height = msg.Height
+		}
+		if a.mode == modeTemplate {
+			a.templatePane = a.templatePane.resize(msg.Width, msg.Height)
 		}
 		return a, nil
 
@@ -166,6 +193,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// Delegate to template modal when in template mode
+	if a.mode == modeTemplate {
+		var cmd tea.Cmd
+		a.templatePane, cmd = a.templatePane.Update(msg)
+		return a, cmd
+	}
+
 	// Delegate to editor when in editor mode
 	if a.mode == modeEditor {
 		var cmd tea.Cmd
@@ -187,6 +221,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) View() string {
 	if a.mode == modeHelp {
 		return a.helpPane.View()
+	}
+	if a.mode == modeTemplate {
+		return a.templatePane.View()
 	}
 	// Before the first WindowSizeMsg, dimensions are zero.
 	if a.width == 0 || a.height == 0 {
@@ -349,6 +386,8 @@ func (a App) renderFooter() string {
 		hint = a.editorPane.FooterHint()
 	case modeHelp:
 		hint = "esc close"
+	case modeTemplate:
+		hint = a.templatePane.FooterHint()
 	default:
 		hint = a.todosPane.FooterHint()
 	}

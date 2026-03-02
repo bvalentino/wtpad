@@ -92,4 +92,12 @@ var (
 	// Divider style (between open/done todos)
 	dividerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
+
+	// Template modal styles
+	templateHeader = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("62"))
+
+	templateSelected = lipgloss.NewStyle().
+				Background(selectionBg)
 )

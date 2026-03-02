@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -19,9 +20,14 @@ func tempStore(t *testing.T) *store.Store {
 	return s
 }
 
+func tempTemplateStoreForApp(t *testing.T) *store.TemplateStore {
+	t.Helper()
+	return store.NewTemplateStore(filepath.Join(t.TempDir(), "templates"))
+}
+
 func TestViewBeforeWindowSizeMsg(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, []model.Todo{{Text: "task"}}, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), []model.Todo{{Text: "task"}}, nil, "main")
 
 	// View() is called before any WindowSizeMsg, so width/height are 0.
 	// This must not panic — returns empty string gracefully.
@@ -39,7 +45,7 @@ func sendResize(t *testing.T, m tea.Model, w, h int) App {
 
 func TestResizePropagatesBothPanes(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, []model.Todo{{Text: "task"}}, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), []model.Todo{{Text: "task"}}, nil, "main")
 
 	app = sendResize(t, app, 80, 40)
 
@@ -60,7 +66,7 @@ func TestResizePropagatesBothPanes(t *testing.T) {
 
 func TestResizeSmallTerminal(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, []model.Todo{{Text: "task"}}, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), []model.Todo{{Text: "task"}}, nil, "main")
 
 	// Very small terminal — must not panic
 	app = sendResize(t, app, 10, 5)
@@ -81,7 +87,7 @@ func TestResizeSmallTerminal(t *testing.T) {
 
 func TestResizeHeaderToggle(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, nil, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), nil, nil, "main")
 
 	// Tall terminal: full ASCII header
 	app = sendResize(t, app, 80, 40)
@@ -105,7 +111,7 @@ func TestResizeHeaderToggle(t *testing.T) {
 func TestRapidResize(t *testing.T) {
 	s := tempStore(t)
 	todos := []model.Todo{{Text: "task 1"}, {Text: "task 2"}}
-	app := New(s, todos, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), todos, nil, "main")
 
 	// Simulate rapid resize — no panics, valid state after each
 	sizes := [][2]int{
@@ -123,7 +129,7 @@ func TestRapidResize(t *testing.T) {
 
 func TestResizeInEditorMode(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, nil, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), nil, nil, "main")
 
 	// Set initial size, then enter editor
 	app = sendResize(t, app, 80, 40)
@@ -155,7 +161,7 @@ func TestResizeInEditorMode(t *testing.T) {
 
 func TestResizeInHelpMode(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, nil, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), nil, nil, "main")
 
 	// Set initial size
 	app = sendResize(t, app, 80, 40)
@@ -186,7 +192,7 @@ func TestResizeInHelpMode(t *testing.T) {
 
 func TestEditorRendersInsideLayout(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, nil, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), nil, nil, "main")
 
 	app = sendResize(t, app, 80, 40)
 	updated, _ := app.Update(enterEditorMsg{name: "", body: "hello"})
@@ -222,7 +228,7 @@ func TestEditorRendersInsideLayout(t *testing.T) {
 
 func TestEditorFooterShowsContextualHints(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, nil, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), nil, nil, "main")
 
 	app = sendResize(t, app, 80, 40)
 	updated, _ := app.Update(enterEditorMsg{name: "", body: "hello"})
@@ -242,7 +248,7 @@ func TestEditorFooterShowsContextualHints(t *testing.T) {
 
 func TestEditorDimensionsMatchContent(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, nil, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), nil, nil, "main")
 
 	app = sendResize(t, app, 80, 40)
 	updated, _ := app.Update(enterEditorMsg{name: "", body: "test"})
@@ -260,7 +266,7 @@ func TestEditorDimensionsMatchContent(t *testing.T) {
 func TestToggleInProgress(t *testing.T) {
 	s := tempStore(t)
 	todos := []model.Todo{{Text: "task 1"}, {Text: "task 2"}}
-	app := New(s, todos, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), todos, nil, "main")
 	app = sendResize(t, app, 80, 40)
 
 	// Press 'p' to toggle first todo to in-progress
@@ -285,7 +291,7 @@ func TestToggleInProgress(t *testing.T) {
 func TestToggleInProgressOnDoneIsNoOp(t *testing.T) {
 	s := tempStore(t)
 	todos := []model.Todo{{Text: "done task", Status: model.StatusDone}}
-	app := New(s, todos, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), todos, nil, "main")
 	app = sendResize(t, app, 80, 40)
 
 	// Press 'p' on a done item — should be a no-op
@@ -300,7 +306,7 @@ func TestToggleInProgressOnDoneIsNoOp(t *testing.T) {
 func TestToggleDoneClearsInProgress(t *testing.T) {
 	s := tempStore(t)
 	todos := []model.Todo{{Text: "wip task", Status: model.StatusInProgress}}
-	app := New(s, todos, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), todos, nil, "main")
 	app = sendResize(t, app, 80, 40)
 
 	// Press 'd' to mark in-progress item as done
@@ -339,7 +345,7 @@ func TestViewRendersInProgressPrefix(t *testing.T) {
 		{Text: "wip task", Status: model.StatusInProgress},
 		{Text: "done task", Status: model.StatusDone},
 	}
-	app := New(s, todos, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), todos, nil, "main")
 	app = sendResize(t, app, 80, 40)
 
 	out := app.View()
@@ -375,7 +381,7 @@ func TestFooterCountsWithInProgress(t *testing.T) {
 		{Text: "wip", Status: model.StatusInProgress},
 		{Text: "done", Status: model.StatusDone},
 	}
-	app := New(s, todos, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), todos, nil, "main")
 	app = sendResize(t, app, 80, 40)
 
 	out := app.View()
@@ -397,7 +403,7 @@ func TestFooterOmitsInProgressWhenZero(t *testing.T) {
 		{Text: "open"},
 		{Text: "done", Status: model.StatusDone},
 	}
-	app := New(s, todos, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), todos, nil, "main")
 	app = sendResize(t, app, 80, 40)
 
 	out := app.View()
@@ -409,7 +415,7 @@ func TestFooterOmitsInProgressWhenZero(t *testing.T) {
 
 func TestResizeContentDimensions(t *testing.T) {
 	s := tempStore(t)
-	app := New(s, nil, nil, "main")
+	app := New(s, tempTemplateStoreForApp(t), nil, nil, "main")
 
 	app = sendResize(t, app, 80, 40)
 

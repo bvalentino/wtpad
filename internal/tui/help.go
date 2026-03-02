@@ -48,6 +48,8 @@ func (h helpModel) View() string {
 			{"x", "Delete selected"},
 			{"D", "Delete all completed"},
 			{"c", "Copy selected"},
+			{"T", "Import template"},
+			{"S", "Save as template"},
 		}},
 		{"Notes", []struct{ key, desc string }{
 			{"↑ / ↓", "Navigate"},

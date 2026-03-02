@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -179,9 +180,16 @@ func runTUI(s *store.Store) {
 		os.Exit(1)
 	}
 
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	ts := store.NewTemplateStore(filepath.Join(home, ".wtpad", "templates"))
+
 	branch := gitutil.DetectBranch(".")
 
-	app := tui.New(s, todos, notes, branch)
+	app := tui.New(s, ts, todos, notes, branch)
 	if _, err := tea.NewProgram(app, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
