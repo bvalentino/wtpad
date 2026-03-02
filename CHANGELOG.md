@@ -1,0 +1,44 @@
+# Changelog
+
+All notable changes to wtpad will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [Unreleased]
+
+### Fixed
+
+- Wrap long lines in note viewer to stay within overlay borders
+
+## [0.1.2] - 2026-03-02
+
+### Changed
+
+- Lower Go directive to 1.24.2 for broader compatibility
+
+## [0.1.1] - 2026-03-02
+
+### Added
+
+- MIT license
+- Updated CLAUDE.md to reflect current codebase state
+
+## [0.1.0] - 2026-03-02
+
+Initial public release.
+
+### Added
+
+- Tabbed TUI with Todos and Notes panes (switch with `Tab`)
+- **Todos**: add, edit, toggle done/in-progress, reorder (Shift+J/K), copy to clipboard, delete with confirmation
+- **Notes**: create, edit, view, delete markdown notes with timestamped filenames
+- Full-screen note editor with save/discard and dirty detection
+- Read-only note viewer overlay with scrolling
+- Help overlay with keybinding reference (`?`)
+- Show/hide completed todos (`v`)
+- Template system: import and save-as shared templates (`T`/`S`)
+- CLI subcommands: `add`, `ls`, `note`, `done` for scriptable access
+- Git branch display by reading `.git/HEAD` directly (no git CLI dependency)
+- Data stored in `.wtpad/` as plain markdown, auto-excluded from git
+- Light mode terminal support
+- Go 1.24.2+ compatibility
