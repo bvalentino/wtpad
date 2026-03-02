@@ -67,9 +67,9 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 	}
 
 	switch keyMsg.String() {
-	case "j", "down":
+	case "down":
 		m = m.moveCursor(1)
-	case "k", "up":
+	case "up":
 		m = m.moveCursor(-1)
 	case "n", "a":
 		return m, func() tea.Msg { return enterEditorMsg{} }

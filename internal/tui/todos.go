@@ -100,9 +100,9 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 	}
 
 	switch keyMsg.String() {
-	case "j", "down":
+	case "down":
 		m = m.moveCursor(1)
-	case "k", "up":
+	case "up":
 		m = m.moveCursor(-1)
 	case "a":
 		m.input.SetValue("")

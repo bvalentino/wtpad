@@ -39,7 +39,7 @@ func (h helpModel) View() string {
 			{"q / Ctrl+C", "Quit"},
 		}},
 		{"Todos", []struct{ key, desc string }{
-			{"j / k", "Navigate"},
+			{"↑ / ↓", "Navigate"},
 			{"a", "Add todo"},
 			{"d / Space", "Toggle done"},
 			{"p", "Toggle in progress"},
@@ -49,7 +49,7 @@ func (h helpModel) View() string {
 			{"c", "Copy selected"},
 		}},
 		{"Notes", []struct{ key, desc string }{
-			{"j / k", "Navigate"},
+			{"↑ / ↓", "Navigate"},
 			{"n", "New note"},
 			{"e / Enter", "Edit selected"},
 			{"x", "Delete selected"},
