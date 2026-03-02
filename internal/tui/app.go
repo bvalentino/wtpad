@@ -225,7 +225,7 @@ func (a App) renderHeader() string {
 
 // renderTabStrip returns the 3-line tab chrome.
 func (a App) renderTabStrip() string {
-	todoLabel := " TODO (t) "
+	todoLabel := " Todo (t) "
 	noteLabel := " Notes (n) "
 	w := a.width
 
@@ -396,4 +396,3 @@ func (a App) switchTab(tab activeTab) App {
 	a.notesPane = a.notesPane.SetFocus(tab == tabNotes)
 	return a
 }
-

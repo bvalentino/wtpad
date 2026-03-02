@@ -195,7 +195,7 @@ func TestEditorRendersInsideLayout(t *testing.T) {
 	out := app.View()
 
 	// Editor mode should still show the tab strip
-	if !strings.Contains(out, "TODO (t)") {
+	if !strings.Contains(out, "Todo (t)") {
 		t.Error("editor view should contain tab strip")
 	}
 

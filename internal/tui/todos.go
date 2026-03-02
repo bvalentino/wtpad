@@ -213,7 +213,7 @@ func (m todosModel) View() string {
 			}
 			if linesUsed < visibleLines {
 				b.WriteString("\n")
-				b.WriteString(hintStyle.Render("Add TODO (a)"))
+				b.WriteString(hintStyle.Render("Add Todo (a)"))
 				linesUsed++
 			}
 			// End hint line (terminator, no count)
@@ -309,7 +309,7 @@ func (m todosModel) View() string {
 		linesUsed++
 		if linesUsed < visibleLines {
 			b.WriteString("\n")
-			b.WriteString(hintStyle.Render("Add TODO (a)"))
+			b.WriteString(hintStyle.Render("Add Todo (a)"))
 			linesUsed++
 		}
 		if linesUsed < visibleLines {

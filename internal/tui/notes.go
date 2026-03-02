@@ -146,7 +146,7 @@ func (m notesModel) View() string {
 		linesUsed++
 		if linesUsed < visibleLines {
 			b.WriteString("\n")
-			b.WriteString(hintStyle.Render("Add note (a)"))
+			b.WriteString(hintStyle.Render("Add Note (a)"))
 			linesUsed++
 		}
 		if linesUsed < visibleLines {
@@ -354,4 +354,3 @@ func (m notesModel) SelectedNote() *model.Note {
 	}
 	return &m.notes[m.cursor]
 }
-
