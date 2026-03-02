@@ -337,12 +337,17 @@ func (a App) renderContent() string {
 // renderFooter returns the footer line with mode-aware hints.
 func (a App) renderFooter() string {
 	c := a.todosPane.Counts()
-	parts := []string{fmt.Sprintf("%d open", c.Open)}
-	if c.InProgress > 0 {
-		parts = append(parts, fmt.Sprintf("%d in progress", c.InProgress))
+	var counts string
+	if a.todosPane.ShowingCompleted() {
+		counts = fmt.Sprintf("viewing %d done", c.Done)
+	} else {
+		parts := []string{fmt.Sprintf("%d open", c.Open)}
+		if c.InProgress > 0 {
+			parts = append(parts, fmt.Sprintf("%d in progress", c.InProgress))
+		}
+		parts = append(parts, fmt.Sprintf("%d done", c.Done))
+		counts = strings.Join(parts, " · ")
 	}
-	parts = append(parts, fmt.Sprintf("%d done", c.Done))
-	counts := strings.Join(parts, " · ")
 
 	if msg := a.todosPane.StatusMsg(); msg != "" {
 		return footerStyle.Render(counts + " · " + msg)
@@ -357,7 +362,7 @@ func (a App) renderFooter() string {
 	case modeHelp:
 		hint = "esc close"
 	default:
-		hint = "? help · t/n switch"
+		hint = a.todosPane.FooterHint()
 	}
 
 	return footerStyle.Render(counts + " · " + hint)

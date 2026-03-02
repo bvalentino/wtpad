@@ -344,14 +344,27 @@ func TestViewRendersInProgressPrefix(t *testing.T) {
 
 	out := app.View()
 
+	// Default view shows open and in-progress, hides done.
 	if !strings.Contains(out, "○ open task") {
 		t.Error("expected '○ open task' in view")
 	}
 	if !strings.Contains(out, "▸ wip task") {
 		t.Error("expected '▸ wip task' in view")
 	}
+	if strings.Contains(out, "✓ done task") {
+		t.Error("done task should be hidden in default (pending) view")
+	}
+
+	// Press 'v' to toggle to completed view.
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	app = updated.(App)
+	out = app.View()
+
 	if !strings.Contains(out, "✓ done task") {
-		t.Error("expected '✓ done task' in view")
+		t.Error("expected '✓ done task' in completed view")
+	}
+	if strings.Contains(out, "○ open task") {
+		t.Error("open task should be hidden in completed view")
 	}
 }
 

@@ -520,6 +520,128 @@ func TestMoveTodoEmptyList(t *testing.T) {
 	}
 }
 
+func TestToggleShowCompleted(t *testing.T) {
+	todos := []model.Todo{
+		{Text: "open one"},
+		{Text: "open two"},
+		{Text: "done one", Status: model.StatusDone},
+		{Text: "done two", Status: model.StatusDone},
+	}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	// Default: pending view — done items hidden.
+	view := m.View()
+	if !strings.Contains(view, "open one") {
+		t.Error("pending view should show open items")
+	}
+	if strings.Contains(view, "done one") {
+		t.Error("pending view should hide done items")
+	}
+
+	// Press 'v' to toggle to completed view.
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if !m.showCompleted {
+		t.Fatal("showCompleted should be true after pressing v")
+	}
+	// Cursor lands on first visible done item (index 2 after sorting: open, open, done, done).
+	if m.cursor != 2 {
+		t.Errorf("cursor should be on first done item (index 2), got %d", m.cursor)
+	}
+
+	view = m.View()
+	if strings.Contains(view, "open one") {
+		t.Error("completed view should hide open items")
+	}
+	if !strings.Contains(view, "done one") {
+		t.Error("completed view should show done items")
+	}
+	if strings.Contains(view, "Add Todo") {
+		t.Error("completed view should not show Add Todo hint")
+	}
+
+	// Press 'v' again to go back to pending view.
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if m.showCompleted {
+		t.Fatal("showCompleted should be false after second v press")
+	}
+	view = m.View()
+	if !strings.Contains(view, "open one") {
+		t.Error("should be back to pending view")
+	}
+}
+
+func TestToggleShowCompletedAddNoOp(t *testing.T) {
+	todos := []model.Todo{
+		{Text: "done", Status: model.StatusDone},
+	}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	// Switch to completed view
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+
+	// Press 'a' — should be no-op
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	if m.inputActive {
+		t.Error("'a' should be no-op in completed view")
+	}
+	if cmd != nil {
+		t.Error("no command expected from no-op 'a'")
+	}
+}
+
+func TestToggleShowCompletedEmptyState(t *testing.T) {
+	todos := []model.Todo{
+		{Text: "open"},
+	}
+
+	m := newTodos(todos, nil)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	// Switch to completed view — no done items
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	view := m.View()
+	if !strings.Contains(view, "No completed todos") {
+		t.Errorf("expected empty state message, got %q", view)
+	}
+}
+
+func TestPurgeSwitchesBackToPendingView(t *testing.T) {
+	s := tempTodosStore(t)
+	todos := []model.Todo{
+		{Text: "open"},
+		{Text: "done", Status: model.StatusDone},
+	}
+
+	m := newTodos(todos, s)
+	m = m.SetSize(40, 20)
+	m = m.SetFocus(true)
+
+	// Switch to completed view
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if !m.showCompleted {
+		t.Fatal("should be in completed view")
+	}
+
+	// Purge done items
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if m.showCompleted {
+		t.Error("should auto-switch back to pending view after purge")
+	}
+	view := m.View()
+	if !strings.Contains(view, "open") {
+		t.Error("should show open items after purge switches back")
+	}
+}
+
 func TestViewShowsFullWrappedText(t *testing.T) {
 	longText := "buy groceries including milk eggs bread butter and cheese from the store"
 	todos := []model.Todo{{Text: longText}}

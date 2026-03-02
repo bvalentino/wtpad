@@ -45,19 +45,20 @@ const (
 )
 
 type todosModel struct {
-	todos        []model.Todo
-	store        *store.Store
-	cursor       int
-	scrollOffset int
-	width        int
-	height       int
-	textWidth    int // available columns for todo text (width minus prefix)
-	focused      bool
-	inputActive  bool
-	input        textinput.Model
-	editIndex    int // -1 = adding new, >= 0 = editing existing
-	statusMsg    string
-	confirm      confirmKind
+	todos         []model.Todo
+	store         *store.Store
+	cursor        int
+	scrollOffset  int
+	width         int
+	height        int
+	textWidth     int // available columns for todo text (width minus prefix)
+	focused       bool
+	showCompleted bool // when true, show only done items; when false, show only open/in-progress
+	inputActive   bool
+	input         textinput.Model
+	editIndex     int // -1 = adding new, >= 0 = editing existing
+	statusMsg     string
+	confirm       confirmKind
 }
 
 func newTodos(todos []model.Todo, s *store.Store) todosModel {
@@ -118,6 +119,12 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 				m = m.deleteCurrent()
 			case confirmPurge:
 				m = m.purgeDone()
+				// Switch back to pending view after purging all done items.
+				if m.showCompleted {
+					m.showCompleted = false
+					m = m.snapCursor()
+					m = m.adjustScroll()
+				}
 			}
 		default:
 			// any other key cancels
@@ -132,6 +139,9 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 	case "up":
 		m = m.moveCursor(-1)
 	case "a":
+		if m.showCompleted {
+			return m, nil // no adding in completed view
+		}
 		m.input.SetValue("")
 		m.input.Focus()
 		m.inputActive = true
@@ -159,6 +169,12 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		m = m.moveTodo(-1)
 	case "D":
 		m.confirm = confirmPurge
+	case "v":
+		m.showCompleted = !m.showCompleted
+		m.cursor = 0
+		m.scrollOffset = 0
+		m = m.snapCursor()
+		m = m.adjustScroll()
 	case "c":
 		if len(m.todos) > 0 {
 			if err := clipboard.WriteAll(m.todos[m.cursor].Text); err != nil {
@@ -205,8 +221,23 @@ func (m todosModel) updateInput(msg tea.Msg) (todosModel, tea.Cmd) {
 }
 
 func (m todosModel) View() string {
-	if len(m.todos) == 0 && !m.inputActive {
-		return "No todos yet. Press 'a' to add one."
+	// Check if there are any visible items.
+	hasVisible := false
+	for _, t := range m.todos {
+		if m.isVisible(t) {
+			hasVisible = true
+			break
+		}
+	}
+
+	if !hasVisible && !m.inputActive {
+		if m.showCompleted {
+			return hintStyle.Render("No completed todos")
+		}
+		if len(m.todos) == 0 {
+			return "No todos yet. Press 'a' to add one."
+		}
+		return hintStyle.Render("No open todos")
 	}
 
 	var b strings.Builder
@@ -222,25 +253,22 @@ func (m todosModel) View() string {
 		visibleLines = 1
 	}
 
-	// Find where the done section starts (sortTodos guarantees open first).
-	doneStart := len(m.todos)
-	for i, t := range m.todos {
-		if t.Status == model.StatusDone {
-			doneStart = i
-			break
-		}
-	}
-
 	// Track whether we've rendered the hint + divider between open and done.
-	hintRendered := false
+	// Only relevant when showing all (not filtering).
+	hintRendered := m.showCompleted // skip hint entirely in completed view
 	prevNotDone := false
 	indent := strings.Repeat(" ", todoPrefixWidth)
 
 	for i := m.scrollOffset; i < len(m.todos) && linesUsed < visibleLines; i++ {
 		todo := m.todos[i]
 
-		// Insert Add hint and divider at the open→done boundary.
-		if todo.Status == model.StatusDone && !hintRendered {
+		// Skip items not matching the current view.
+		if !m.isVisible(todo) {
+			continue
+		}
+
+		// Insert Add hint and divider at the open→done boundary (pending view only).
+		if !m.showCompleted && todo.Status == model.StatusDone && !hintRendered {
 			hintRendered = true
 			// Add (a) hint
 			if linesUsed > 0 && linesUsed < visibleLines {
@@ -339,8 +367,8 @@ func (m todosModel) View() string {
 		prevNotDone = todo.Status != model.StatusDone
 	}
 
-	// If all visible items were open, still show the Add hint at the end.
-	if !hintRendered && doneStart > 0 && linesUsed > 0 && linesUsed < visibleLines {
+	// If all visible items were open (pending view), still show the Add hint at the end.
+	if !m.showCompleted && !hintRendered && linesUsed > 0 && linesUsed < visibleLines {
 		b.WriteString("\n")
 		linesUsed++
 		if linesUsed < visibleLines {
@@ -371,11 +399,25 @@ func (m todosModel) View() string {
 	return b.String()
 }
 
-// moveCursor moves the cursor by delta, clamps, and adjusts scroll.
+// moveCursor moves the cursor to the next visible item in the given direction.
+// If no visible item exists in that direction, returns unchanged (no-op).
 func (m todosModel) moveCursor(delta int) todosModel {
-	m.cursor += delta
-	m = m.clampCursor()
-	m = m.adjustScroll()
+	if len(m.todos) == 0 {
+		return m
+	}
+	// Step in the given direction until we find a visible item.
+	newIdx := m.cursor
+	for range len(m.todos) {
+		newIdx += delta
+		if newIdx < 0 || newIdx >= len(m.todos) {
+			return m // hit bounds, stay put
+		}
+		if m.isVisible(m.todos[newIdx]) {
+			m.cursor = newIdx
+			m = m.adjustScroll()
+			return m
+		}
+	}
 	return m
 }
 
@@ -384,6 +426,9 @@ func (m todosModel) moveCursor(delta int) todosModel {
 func (m todosModel) moveTodo(delta int) todosModel {
 	if len(m.todos) == 0 {
 		return m
+	}
+	if m.showCompleted {
+		return m // reordering not supported in completed view
 	}
 	newIdx := m.cursor + delta
 	if newIdx < 0 || newIdx >= len(m.todos) {
@@ -414,6 +459,43 @@ func (m todosModel) clampCursor() todosModel {
 	return m
 }
 
+// snapCursor clamps cursor to valid bounds, then moves it to the nearest
+// visible item if the current position is hidden.
+func (m todosModel) snapCursor() todosModel {
+	m = m.clampCursor()
+	return m.clampCursorVisible()
+}
+
+// clampCursorVisible moves cursor to the nearest visible item.
+// If the current cursor points to a hidden item, scan forward then backward.
+func (m todosModel) clampCursorVisible() todosModel {
+	if len(m.todos) == 0 {
+		m.cursor = 0
+		return m
+	}
+	// If current position is visible, we're fine.
+	if m.cursor < len(m.todos) && m.isVisible(m.todos[m.cursor]) {
+		return m
+	}
+	// Scan forward for a visible item.
+	for i := m.cursor; i < len(m.todos); i++ {
+		if m.isVisible(m.todos[i]) {
+			m.cursor = i
+			return m
+		}
+	}
+	// Scan backward.
+	for i := m.cursor - 1; i >= 0; i-- {
+		if m.isVisible(m.todos[i]) {
+			m.cursor = i
+			return m
+		}
+	}
+	// No visible items — cursor stays at 0.
+	m.cursor = 0
+	return m
+}
+
 // availableLines returns the number of lines available for todo rendering.
 func (m todosModel) availableLines() int {
 	h := m.height
@@ -436,13 +518,18 @@ func (m todosModel) availableLines() int {
 func (m todosModel) linesUpTo(targetIdx int) int {
 	linesUsed := 0
 	prevNotDone := false
-	hintRendered := false
+	hintRendered := m.showCompleted // skip hint in completed view
 
 	for i := m.scrollOffset; i < len(m.todos) && i <= targetIdx; i++ {
 		todo := m.todos[i]
 
-		// Hint + divider at the open→done boundary.
-		if todo.Status == model.StatusDone && !hintRendered {
+		// Skip items not matching the current view.
+		if !m.isVisible(todo) {
+			continue
+		}
+
+		// Hint + divider at the open→done boundary (pending view only).
+		if !m.showCompleted && todo.Status == model.StatusDone && !hintRendered {
 			hintRendered = true
 			if linesUsed > 0 {
 				linesUsed++ // blank before hint
@@ -505,7 +592,7 @@ func (m todosModel) toggleDone() todosModel {
 		t.Status = model.StatusDone
 	}
 	m.todos = sortTodos(m.todos)
-	m = m.clampCursor()
+	m = m.snapCursor()
 	m = m.adjustScroll()
 	m.save()
 	return m
@@ -527,7 +614,7 @@ func (m todosModel) toggleInProgress() todosModel {
 		t.Status = model.StatusInProgress
 	}
 	m.todos = sortTodos(m.todos)
-	m = m.clampCursor()
+	m = m.snapCursor()
 	m = m.adjustScroll()
 	m.save()
 	return m
@@ -539,7 +626,7 @@ func (m todosModel) deleteCurrent() todosModel {
 		return m
 	}
 	m.todos = append(m.todos[:m.cursor], m.todos[m.cursor+1:]...)
-	m = m.clampCursor()
+	m = m.snapCursor()
 	m = m.adjustScroll()
 	m.save()
 	return m
@@ -554,7 +641,7 @@ func (m todosModel) purgeDone() todosModel {
 		}
 	}
 	m.todos = filtered
-	m = m.clampCursor()
+	m = m.snapCursor()
 	m = m.adjustScroll()
 	m.save()
 	return m
@@ -686,6 +773,27 @@ func (m todosModel) Focused() bool {
 // StatusMsg returns the current transient status message (empty if none).
 func (m todosModel) StatusMsg() string {
 	return m.statusMsg
+}
+
+// isVisible returns whether a todo should be shown in the current view mode.
+func (m todosModel) isVisible(t model.Todo) bool {
+	if m.showCompleted {
+		return t.Status == model.StatusDone
+	}
+	return t.Status != model.StatusDone
+}
+
+// ShowingCompleted returns whether the completed view is active.
+func (m todosModel) ShowingCompleted() bool {
+	return m.showCompleted
+}
+
+// FooterHint returns the mode-aware hint string for the footer.
+func (m todosModel) FooterHint() string {
+	if m.showCompleted {
+		return "v back · ? help · t/n switch"
+	}
+	return "? help · t/n switch"
 }
 
 // Counts returns the number of todos in each status.
