@@ -108,9 +108,9 @@ func TestNotesNewNoteSignal(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	if cmd == nil {
-		t.Fatal("'n' should produce a command")
+		t.Fatal("'a' should produce a command")
 	}
 	msg := cmd()
 	editorMsg, ok := msg.(enterEditorMsg)

@@ -200,7 +200,15 @@ func (m todosModel) updateInput(msg tea.Msg) (todosModel, tea.Cmd) {
 				} else {
 					m.todos = append(m.todos, model.Todo{Text: text})
 					m.todos = sortTodos(m.todos)
-					m = m.clampCursor()
+					// Move cursor to the newly added todo.
+					// Scan in reverse: sortTodos is stable and the new
+					// item was appended last, so it's the last match.
+					for i := len(m.todos) - 1; i >= 0; i-- {
+						if m.todos[i].Text == text && m.todos[i].Status == model.StatusOpen {
+							m.cursor = i
+							break
+						}
+					}
 					m = m.adjustScroll()
 				}
 				m.save()
@@ -242,20 +250,11 @@ func (m todosModel) View() string {
 
 	var b strings.Builder
 	linesUsed := 0
-	visibleLines := m.height
-	if m.inputActive {
-		visibleLines--
-	}
-	if m.confirm != confirmNone {
-		visibleLines--
-	}
+	visibleLines := m.height - 2 // reserve 2 lines for bottom bar (divider + hint/input/confirm)
 	if visibleLines < 1 {
 		visibleLines = 1
 	}
 
-	// Track whether we've rendered the hint + divider between open and done.
-	// Only relevant when showing all (not filtering).
-	hintRendered := m.showCompleted // skip hint entirely in completed view
 	prevNotDone := false
 	indent := strings.Repeat(" ", todoPrefixWidth)
 
@@ -267,45 +266,16 @@ func (m todosModel) View() string {
 			continue
 		}
 
-		// Insert Add hint and divider at the open→done boundary (pending view only).
-		if !m.showCompleted && todo.Status == model.StatusDone && !hintRendered {
-			hintRendered = true
-			// Add (a) hint
-			if linesUsed > 0 && linesUsed < visibleLines {
-				b.WriteString("\n")
-				linesUsed++
-			}
-			if linesUsed < visibleLines {
-				b.WriteString("\n")
-				b.WriteString(hintStyle.Render("Add Todo (a)"))
-				linesUsed++
-			}
-			// End hint line (terminator, no count)
-			if linesUsed < visibleLines {
-				b.WriteString("\n")
-			}
-			// Blank line after hint
-			if linesUsed < visibleLines {
-				b.WriteString("\n")
-				linesUsed++
-			}
-			// Divider
-			if linesUsed < visibleLines {
-				b.WriteString(dividerStyle.Render(strings.Repeat("─", m.width)))
-				linesUsed++
-			}
-		}
-
-		if linesUsed >= visibleLines {
-			break
-		}
-
 		// Blank line between non-done items for breathing room.
 		if todo.Status != model.StatusDone && prevNotDone && linesUsed < visibleLines {
 			if linesUsed > 0 {
 				b.WriteString("\n")
 				linesUsed++
 			}
+		}
+
+		if linesUsed >= visibleLines {
+			break
 		}
 
 		// Newline before the item (except first rendered line).
@@ -367,36 +337,35 @@ func (m todosModel) View() string {
 		prevNotDone = todo.Status != model.StatusDone
 	}
 
-	// If all visible items were open (pending view), still show the Add hint at the end.
-	if !m.showCompleted && !hintRendered && linesUsed > 0 && linesUsed < visibleLines {
-		b.WriteString("\n")
-		linesUsed++
-		if linesUsed < visibleLines {
-			b.WriteString("\n")
-			b.WriteString(hintStyle.Render("Add Todo (a)"))
-			linesUsed++
-		}
-		if linesUsed < visibleLines {
-			b.WriteString("\n")
-			linesUsed++
-		}
+	// Build bottom bar content.
+	var bar strings.Builder
+	bar.WriteString(dividerStyle.Render(strings.Repeat("─", m.width)))
+	bar.WriteString("\n")
+	switch {
+	case m.inputActive:
+		bar.WriteString(m.input.View())
+	case m.confirm == confirmDelete:
+		bar.WriteString(noteConfirm.Render("Delete todo? (y to confirm)"))
+	case m.confirm == confirmPurge:
+		bar.WriteString(noteConfirm.Render("Purge completed? (y to confirm)"))
+	case !m.showCompleted:
+		bar.WriteString(hintStyle.Render("Add Todo (a)"))
 	}
 
-	if m.inputActive {
-		b.WriteString("\n")
-		b.WriteString(m.input.View())
+	// Assemble: item lines, then pad to fill visibleLines, then bottom bar.
+	// Total output must be exactly m.height lines (visibleLines + 2).
+	itemContent := b.String()
+	itemLines := strings.Split(itemContent, "\n")
+	// Pad item lines to exactly visibleLines entries.
+	for len(itemLines) < visibleLines {
+		itemLines = append(itemLines, "")
 	}
+	itemLines = itemLines[:visibleLines] // trim if over (shouldn't happen)
+	// Append the 2 bottom bar lines.
+	barLines := strings.Split(bar.String(), "\n")
+	itemLines = append(itemLines, barLines...)
 
-	switch m.confirm {
-	case confirmDelete:
-		b.WriteString("\n")
-		b.WriteString(noteConfirm.Render("Delete todo? (y to confirm)"))
-	case confirmPurge:
-		b.WriteString("\n")
-		b.WriteString(noteConfirm.Render("Purge completed? (y to confirm)"))
-	}
-
-	return b.String()
+	return strings.Join(itemLines, "\n")
 }
 
 // moveCursor moves the cursor to the next visible item in the given direction.
@@ -497,14 +466,9 @@ func (m todosModel) clampCursorVisible() todosModel {
 }
 
 // availableLines returns the number of lines available for todo rendering.
+// Always reserves 2 lines for the bottom bar (divider + hint/input/confirm).
 func (m todosModel) availableLines() int {
-	h := m.height
-	if m.inputActive {
-		h--
-	}
-	if m.confirm != confirmNone {
-		h--
-	}
+	h := m.height - 2
 	if h < 1 {
 		h = 1
 	}
@@ -512,13 +476,14 @@ func (m todosModel) availableLines() int {
 }
 
 // linesUpTo counts rendered lines from scrollOffset through targetIdx,
-// mirroring the View() line-accounting logic (blank lines, hint/divider,
-// wrapped item heights). Must stay in sync with View() — any change to
-// spacing or wrapping in View() must be reflected here.
+// mirroring the View() line-accounting logic (blank lines between items,
+// wrapped item heights). Does not account for the bottom action bar.
+// Must stay in sync with View() — any change to spacing or wrapping
+// in View() must be reflected here.
 func (m todosModel) linesUpTo(targetIdx int) int {
 	linesUsed := 0
 	prevNotDone := false
-	hintRendered := m.showCompleted // skip hint in completed view
+	avail := m.availableLines()
 
 	for i := m.scrollOffset; i < len(m.todos) && i <= targetIdx; i++ {
 		todo := m.todos[i]
@@ -528,21 +493,11 @@ func (m todosModel) linesUpTo(targetIdx int) int {
 			continue
 		}
 
-		// Hint + divider at the open→done boundary (pending view only).
-		if !m.showCompleted && todo.Status == model.StatusDone && !hintRendered {
-			hintRendered = true
-			if linesUsed > 0 {
-				linesUsed++ // blank before hint
-			}
-			linesUsed++ // hint text
-			// hint line terminator (no count)
-			linesUsed++ // blank after hint
-			linesUsed++ // divider
-		}
-
 		// Blank line between consecutive non-done items.
-		if todo.Status != model.StatusDone && prevNotDone && linesUsed > 0 {
-			linesUsed++
+		if todo.Status != model.StatusDone && prevNotDone && linesUsed < avail {
+			if linesUsed > 0 {
+				linesUsed++
+			}
 		}
 
 		// Newline before item is a terminator (no count).
@@ -556,7 +511,7 @@ func (m todosModel) linesUpTo(targetIdx int) int {
 }
 
 // adjustScroll ensures scrollOffset keeps the cursor visible within the pane.
-// Uses line counting to account for blank lines and hint/divider sections.
+// Uses line counting to account for blank lines and wrapped item heights.
 func (m todosModel) adjustScroll() todosModel {
 	if m.height < 1 || len(m.todos) == 0 {
 		return m
@@ -573,6 +528,16 @@ func (m todosModel) adjustScroll() todosModel {
 		m.scrollOffset++
 		if m.scrollOffset > m.cursor {
 			m.scrollOffset = m.cursor
+			break
+		}
+	}
+
+	// Scroll back up to fill viewport when there's trailing whitespace,
+	// but never push the cursor out of view.
+	for m.scrollOffset > 0 && m.linesUpTo(len(m.todos)-1) < avail {
+		m.scrollOffset--
+		if m.linesUpTo(m.cursor) > avail {
+			m.scrollOffset++
 			break
 		}
 	}

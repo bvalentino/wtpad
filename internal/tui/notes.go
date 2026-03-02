@@ -96,11 +96,8 @@ func (m notesModel) View() string {
 
 	var b strings.Builder
 
-	// Reserve 1 line for confirmation prompt if active
-	visibleLines := m.height
-	if m.confirmDelete {
-		visibleLines--
-	}
+	// Reserve 2 lines for bottom bar (divider + hint/confirm)
+	visibleLines := m.height - 2
 	if visibleLines < 1 {
 		visibleLines = 1
 	}
@@ -140,27 +137,30 @@ func (m notesModel) View() string {
 		}
 	}
 
-	// Add note hint
-	if linesUsed > 0 && linesUsed < visibleLines {
-		b.WriteString("\n")
-		linesUsed++
-		if linesUsed < visibleLines {
-			b.WriteString("\n")
-			b.WriteString(hintStyle.Render("Add Note (a)"))
-			linesUsed++
-		}
-		if linesUsed < visibleLines {
-			b.WriteString("\n")
-			linesUsed++
-		}
-	}
-
+	// Build bottom bar content.
+	var bar strings.Builder
+	bar.WriteString(dividerStyle.Render(strings.Repeat("─", m.width)))
+	bar.WriteString("\n")
 	if m.confirmDelete {
-		b.WriteString("\n")
-		b.WriteString(noteConfirm.Render("Delete note? (y to confirm)"))
+		bar.WriteString(noteConfirm.Render("Delete note? (y to confirm)"))
+	} else {
+		bar.WriteString(hintStyle.Render("Add Note (a)"))
 	}
 
-	return b.String()
+	// Assemble: item lines, then pad to fill visibleLines, then bottom bar.
+	// Total output must be exactly m.height lines (visibleLines + 2).
+	itemContent := b.String()
+	itemLines := strings.Split(itemContent, "\n")
+	// Pad item lines to exactly visibleLines entries.
+	for len(itemLines) < visibleLines {
+		itemLines = append(itemLines, "")
+	}
+	itemLines = itemLines[:visibleLines] // trim if over (shouldn't happen)
+	// Append the 2 bottom bar lines.
+	barLines := strings.Split(bar.String(), "\n")
+	itemLines = append(itemLines, barLines...)
+
+	return strings.Join(itemLines, "\n")
 }
 
 // splitHeadingAndBody extracts a markdown heading from the first line of body.
@@ -244,11 +244,9 @@ func (m notesModel) noteHeight(idx int) int {
 }
 
 // availableLines returns the number of lines available for note rendering.
+// Always reserves 2 lines for the bottom bar (divider + hint/confirm).
 func (m notesModel) availableLines() int {
-	h := m.height
-	if m.confirmDelete {
-		h--
-	}
+	h := m.height - 2
 	if h < 1 {
 		h = 1
 	}
@@ -256,7 +254,7 @@ func (m notesModel) availableLines() int {
 }
 
 // adjustScroll ensures scrollOffset keeps the cursor visible,
-// accounting for variable-height note entries and the confirmation prompt.
+// accounting for variable-height note entries.
 func (m notesModel) adjustScroll() notesModel {
 	if m.height < 1 || len(m.notes) == 0 {
 		return m
@@ -290,6 +288,19 @@ func (m notesModel) adjustScroll() notesModel {
 			break
 		}
 	}
+
+	// Scroll back up to fill viewport when there's trailing whitespace.
+	for m.scrollOffset > 0 {
+		used := 0
+		for i := m.scrollOffset - 1; i < len(m.notes); i++ {
+			used += m.noteHeight(i)
+		}
+		if used > avail {
+			break
+		}
+		m.scrollOffset--
+	}
+
 	return m
 }
 
