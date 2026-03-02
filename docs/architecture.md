@@ -95,24 +95,3 @@ The root model tracks the current mode as an enum:
 | `modeHelp` | Help overlay is active |
 
 Mode transitions are the responsibility of `app.Update()`.
-
----
-
-## Implementation Ticket Index
-
-See `docs/implementation/` for all tickets. Each ticket has a `State` of either `todo` or `done`. Claude Code should pick the next `todo` ticket whose dependencies are all `done`. Recommended implementation order:
-
-1. `01-scaffold.md` — Go module, dependencies, empty main ✓
-2. `02-models.md` — Todo and Note structs ✓
-3. `03-store.md` — JSON persistence layer ✓
-4. `04-cli.md` — CLI subcommands ✓
-5. `05-tui-root.md` — Bubble Tea root model and layout shell ✓
-6. `06-tui-todos.md` — Todo pane ✓
-7. `07-tui-notes.md` — Notes pane ✓
-8. `08-tui-editor.md` — Note editor overlay ✓
-9. `09-tui-statusbar.md` — Status bar ✓
-10. `10-tui-help.md` — Help overlay ✓
-11. `11-resize.md` — Terminal resize handling ✓ (superseded, see 13 & 14)
-12. `12-git-integration.md` — Branch detection, auto-ignore ✓
-13. `13-layout-redesign.md` — Vertical tab layout redesign
-14. `14-resize-vertical.md` — Resize handling for vertical layout
