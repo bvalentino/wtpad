@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -29,13 +30,16 @@ const (
 	modeViewer
 	modeHelp
 	modeTemplate
+	modeTitleInput
 )
 
 // Layout constants
 const (
-	tabStripHeight = 3
-	footerHeight   = 1
-	sideBorderSize = 2 // left + right │ borders
+	tabStripHeight    = 3
+	footerHeight      = 1
+	sideBorderSize    = 2  // left + right │ borders
+	maxTitleLen       = 40
+	maxTitleLineWidth = 26 // max chars per line inside the title box
 )
 
 // ASCII art header, 6 lines.
@@ -64,7 +68,10 @@ type App struct {
 	contentWidth   int
 
 	// Pane metadata
+	title  string
 	branch string
+
+	titleInput textinput.Model
 
 	todosPane    todosModel
 	notesPane    notesModel
@@ -77,21 +84,42 @@ type App struct {
 	promptStore *store.PromptStore
 }
 
-func New(s *store.Store, ts *store.TemplateStore, ps *store.PromptStore, todos []model.Todo, notes []model.Note, prompts []model.Note, branch string) App {
-	tp := newTodos(todos, s)
-	np := newNotes(notes, s)
-	pp := newPrompts(prompts, ps)
+// AppConfig holds the parameters for creating a new App.
+type AppConfig struct {
+	Store         *store.Store
+	TemplateStore *store.TemplateStore
+	PromptStore   *store.PromptStore
+	Todos         []model.Todo
+	Notes         []model.Note
+	Prompts       []model.Note
+	Branch        string
+	Title         string
+}
+
+func New(cfg AppConfig) App {
+	tp := newTodos(cfg.Todos, cfg.Store)
+	np := newNotes(cfg.Notes, cfg.Store)
+	pp := newPrompts(cfg.Prompts, cfg.PromptStore)
+	ti := textinput.New()
+	ti.Prompt = "Title: "
+	ti.CharLimit = maxTitleLen
+	title := cfg.Title
+	if runes := []rune(title); len(runes) > maxTitleLen {
+		title = string(runes[:maxTitleLen])
+	}
 	return App{
-		store:        s,
-		promptStore:  ps,
+		store:        cfg.Store,
+		promptStore:  cfg.PromptStore,
 		activeTab:    tabTodos,
 		mode:         modeNormal,
-		branch:       branch,
+		title:        title,
+		branch:       cfg.Branch,
+		titleInput:   ti,
 		todosPane:    tp,
 		notesPane:    np,
 		promptsPane:  pp,
 		editorPane:   newEditorModel(),
-		templatePane: newTemplateModal(ts),
+		templatePane: newTemplateModal(cfg.TemplateStore),
 	}
 }
 
@@ -207,9 +235,36 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			case "?":
 				return a, func() tea.Msg { return enterHelpMsg{} }
+			case "t":
+				a.titleInput.SetValue(a.title)
+				a.titleInput.Focus()
+				a.mode = modeTitleInput
+				return a, textinput.Blink
 			case "q":
 				return a, tea.Quit
 			}
+		}
+
+		// Handle title input mode
+		if a.mode == modeTitleInput {
+			switch msg.String() {
+			case "enter":
+				title := strings.TrimSpace(a.titleInput.Value())
+				if err := a.store.SaveTitle(title); err != nil {
+					log.Printf("wtpad: failed to save title: %v", err)
+				} else {
+					a.title = title
+				}
+				a.titleInput.Blur()
+				a.mode = modeNormal
+				a = a.layoutVertical()
+			case "esc":
+				a.titleInput.Blur()
+				a.mode = modeNormal
+			default:
+				a.titleInput, _ = a.titleInput.Update(msg)
+			}
+			return a, nil
 		}
 	}
 
@@ -290,15 +345,117 @@ func (a App) View() string {
 }
 
 // renderHeader returns the ASCII art or compact header.
+// When a title is set, a ┏━━┓ box is overlaid on lines 1–3 of the logo (full mode)
+// or the title is right-aligned on the compact line.
 func (a App) renderHeader() string {
 	if a.showFullHeader {
-		return headerStyle.Render(asciiHeader)
+		lines := strings.Split(asciiHeader, "\n")
+
+		// Center the ASCII art within the terminal width.
+		logoWidth := 0
+		for _, l := range lines {
+			if w := len(l); w > logoWidth {
+				logoWidth = w
+			}
+		}
+		if pad := (a.width - logoWidth) / 2; pad > 0 {
+			prefix := strings.Repeat(" ", pad)
+			for i, l := range lines {
+				lines[i] = prefix + l
+			}
+		}
+
+		if a.title != "" && a.width > 4 {
+			titleLines := wrapTitle(a.title, maxTitleLineWidth)
+			if len(titleLines) > 3 {
+				titleLines = titleLines[:3]
+			}
+			numContent := len(titleLines)
+
+			// Box width based on longest wrapped line.
+			maxLineW := 0
+			for _, l := range titleLines {
+				if w := lipgloss.Width(l); w > maxLineW {
+					maxLineW = w
+				}
+			}
+			boxInner := maxLineW + 8 // 4-char padding each side
+			boxWidth := boxInner + 2
+			if boxWidth > a.width-2 {
+				boxWidth = a.width - 2
+				boxInner = boxWidth - 2
+			}
+			if boxInner < maxLineW {
+				boxInner = maxLineW
+				boxWidth = boxInner + 2
+			}
+			boxStart := (a.width - boxWidth) / 2
+			if boxStart < 0 {
+				boxStart = 0
+			}
+			boxEnd := boxStart + boxWidth
+
+			// Pad lines so slicing up to boxEnd is safe.
+			for i := range lines {
+				if len(lines[i]) < boxEnd {
+					lines[i] += strings.Repeat(" ", boxEnd-len(lines[i]))
+				}
+			}
+
+			// Box occupies lines topIdx..bottomIdx of the ASCII art.
+			topIdx := 1
+			bottomIdx := topIdx + numContent + 1
+
+			result := make([]string, len(lines))
+			for i, line := range lines {
+				left := line[:boxStart]
+				right := ""
+				if len(line) > boxEnd {
+					right = line[boxEnd:]
+				}
+
+				switch {
+				case i == topIdx: // ┏━━━┓
+					result[i] = headerStyle.Render(left) +
+						titleStyle.Render("┏"+strings.Repeat("━", boxInner)+"┓") +
+						headerStyle.Render(right)
+				case i > topIdx && i < bottomIdx: // ┃ title ┃
+					tl := titleLines[i-topIdx-1]
+					tlW := lipgloss.Width(tl)
+					lp := (boxInner - tlW) / 2
+					rp := boxInner - tlW - lp
+					result[i] = headerStyle.Render(left) +
+						titleStyle.Render("┃"+strings.Repeat(" ", lp)+tl+strings.Repeat(" ", rp)+"┃") +
+						headerStyle.Render(right)
+				case i == bottomIdx: // ┗━━━┛
+					result[i] = headerStyle.Render(left) +
+						titleStyle.Render("┗"+strings.Repeat("━", boxInner)+"┛") +
+						headerStyle.Render(right)
+				default:
+					result[i] = headerStyle.Render(line)
+				}
+			}
+			return strings.Join(result, "\n")
+		}
+		return headerStyle.Render(strings.Join(lines, "\n"))
 	}
+
 	compact := "wtpad"
 	if a.branch != "" {
 		compact += " · " + a.branch
 	}
-	return headerStyle.Render(compact)
+	left := headerStyle.Render(compact)
+	if a.title != "" {
+		styledTitle := titleStyle.Render(a.title)
+		titleW := lipgloss.Width(styledTitle)
+		leftW := lipgloss.Width(left)
+		gap := a.width - leftW - titleW
+		if gap < 1 {
+			gap = 1
+		}
+		return left + strings.Repeat(" ", gap) + styledTitle
+	}
+	return left
 }
 
 // renderTabStrip returns the 3-line tab chrome.
@@ -426,6 +583,8 @@ func (a App) renderFooter() string {
 		return footerStyle.Render(a.editorPane.FooterHint())
 	case modeViewer:
 		return footerStyle.Render(a.viewerPane.FooterHint())
+	case modeTitleInput:
+		return footerStyle.Render(a.titleInput.View())
 	}
 
 	var counts, hint string
@@ -486,7 +645,6 @@ func (a App) layoutVertical() App {
 		a.showFullHeader = false
 		a.headerHeight = 1
 	}
-
 	// contentHeight: total height minus header, tab strip, footer, bottom border
 	a.contentHeight = a.height - a.headerHeight - tabStripHeight - footerHeight - 1 // -1 for bottom border └─┘
 	if a.contentHeight < 1 {
@@ -498,6 +656,7 @@ func (a App) layoutVertical() App {
 		a.contentWidth = 1
 	}
 
+	a.titleInput.Width = a.width - 10
 	a.todosPane = a.todosPane.SetSize(a.contentWidth, a.contentHeight)
 	a.notesPane = a.notesPane.SetSize(a.contentWidth, a.contentHeight)
 	a.promptsPane = a.promptsPane.SetSize(a.contentWidth, a.contentHeight)
@@ -538,6 +697,25 @@ func (a App) handleEditorSave(m editorSaveMsg) App {
 	a.viewerPane = a.viewerPane.openViewer(name, m.body, a.width, a.height)
 	a.mode = modeViewer
 	return a
+}
+
+// wrapTitle splits a title into lines no wider than width, breaking on spaces.
+func wrapTitle(title string, width int) []string {
+	words := strings.Fields(title)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	var lines []string
+	current := words[0]
+	for _, word := range words[1:] {
+		if lipgloss.Width(current)+1+lipgloss.Width(word) <= width {
+			current += " " + word
+		} else {
+			lines = append(lines, current)
+			current = word
+		}
+	}
+	return append(lines, current)
 }
 
 // switchTab switches to the given tab.

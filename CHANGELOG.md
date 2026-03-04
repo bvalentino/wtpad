@@ -11,6 +11,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Prompts tab**: third tab for managing reusable prompts stored in `~/.wtpad/prompts/`
 - Copy prompt to clipboard (`c`) with async write and size cap
 - Shared list pane for notes and prompts (scroll, cursor, keyboard navigation)
+- **Title**: press `t` in the TUI to set a title displayed as a box overlay on the centered ASCII logo
+  - Long titles word-wrap into up to 3 lines inside the box
+  - Compact header (short terminals) shows the title right-aligned
+  - CLI: `wtpad title <text>`, `wtpad title --clear`, `wtpad title` (show current)
+
+### Fixed
+
+- Clipboard copy (`c`) on prompts now strips the `# Title` heading line
 
 ### Changed
 

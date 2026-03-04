@@ -43,6 +43,7 @@ func (h helpModel) View() string {
 	}{
 		{"Global", []struct{ key, desc string }{
 			{"Tab", "Switch tab"},
+			{"t", "Set title"},
 			{"?", "Toggle this help"},
 			{"q / Ctrl+C", "Quit"},
 		}},

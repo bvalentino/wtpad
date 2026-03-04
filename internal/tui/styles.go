@@ -177,6 +177,11 @@ var (
 				Foreground(lipgloss.Color("240")).
 				Padding(0, 1)
 
+	// Title style (bold white, rendered above the logo)
+	titleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("255")).
+			Bold(true)
+
 	// Header style
 	headerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("62"))
