@@ -7,6 +7,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/bvalentino/wtpad/internal/model"
 	"github.com/bvalentino/wtpad/internal/store"
@@ -71,9 +72,11 @@ func (m promptsModel) Update(msg tea.Msg) (promptsModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle "y" for delete confirmation — perform the actual delete
-	if m.confirmDelete && keyMsg.String() == "y" {
-		m = m.deleteSelected()
+	// Handle delete confirmation before any other key processing.
+	if m.confirmDelete {
+		if keyMsg.String() == "y" {
+			m = m.deleteSelected()
+		}
 		m.confirmDelete = false
 		return m, nil
 	}
@@ -111,7 +114,34 @@ func (m promptsModel) Update(msg tea.Msg) (promptsModel, tea.Cmd) {
 
 func (m promptsModel) View() string {
 	if len(m.items) == 0 {
-		return "No prompts yet. Press 'a' to create one."
+		line1 := "Reusable text snippets."
+		line2 := hintStyle.Render("Press 'a' to create your first prompt.")
+
+		lines := []string{line1, line2}
+		totalLines := len(lines)
+
+		// Vertically center
+		topPad := (m.height - totalLines) / 2
+		if topPad < 0 {
+			topPad = 0
+		}
+
+		var b strings.Builder
+		for i := 0; i < topPad; i++ {
+			b.WriteString("\n")
+		}
+		for i, line := range lines {
+			lineWidth := lipgloss.Width(line)
+			leftPad := (m.width - lineWidth) / 2
+			if leftPad < 0 {
+				leftPad = 0
+			}
+			b.WriteString(strings.Repeat(" ", leftPad) + line)
+			if i < len(lines)-1 {
+				b.WriteString("\n")
+			}
+		}
+		return b.String()
 	}
 
 	var barContent string

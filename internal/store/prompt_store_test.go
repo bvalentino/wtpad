@@ -163,8 +163,8 @@ func TestSavePromptAtomicCleanup(t *testing.T) {
 	if _, err := ps.SavePrompt("atomic", "content"); err != nil {
 		t.Fatalf("SavePrompt: %v", err)
 	}
-	tmp := filepath.Join(ps.basePath, "atomic.md.tmp")
-	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
-		t.Errorf("expected .tmp file to be cleaned up, got err=%v", err)
+	leftovers, _ := filepath.Glob(filepath.Join(ps.basePath, ".tmp-*"))
+	if len(leftovers) != 0 {
+		t.Errorf("expected no .tmp-* files, found: %v", leftovers)
 	}
 }

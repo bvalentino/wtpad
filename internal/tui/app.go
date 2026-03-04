@@ -348,7 +348,7 @@ func (a App) renderTabStrip() string {
 	// tabsSpan = total columns consumed by tabs + gaps (2 gaps of 1 char each)
 	tabsSpan := todoW + 1 + noteW + 1 + promptW
 
-	fill := a.width - tabsSpan
+	fill := a.width - tabsSpan - 1 // -1 for the ╮ right-edge cap
 	if fill < 0 {
 		fill = 0
 	}
@@ -418,6 +418,16 @@ func (a App) renderContent() string {
 
 // renderFooter returns the footer line with mode-aware hints.
 func (a App) renderFooter() string {
+	// Mode-level overrides take precedence over tab-level hints.
+	switch a.mode {
+	case modeHelp:
+		return footerStyle.Render("esc close")
+	case modeEditor:
+		return footerStyle.Render(a.editorPane.FooterHint())
+	case modeViewer:
+		return footerStyle.Render(a.viewerPane.FooterHint())
+	}
+
 	var counts, hint string
 
 	switch a.activeTab {

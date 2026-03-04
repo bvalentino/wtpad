@@ -35,8 +35,11 @@ func TestPromptsEmptyView(t *testing.T) {
 	m := newPrompts(nil, nil)
 	m = m.SetSize(40, 10)
 	view := m.View()
-	if !strings.Contains(view, "No prompts") {
-		t.Errorf("empty view should show placeholder, got %q", view)
+	if !strings.Contains(view, "Reusable text snippets") {
+		t.Errorf("empty view should describe prompts, got %q", view)
+	}
+	if !strings.Contains(view, "Press 'a'") {
+		t.Errorf("empty view should show create hint, got %q", view)
 	}
 }
 

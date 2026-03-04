@@ -39,9 +39,11 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle "y" for delete confirmation — perform the actual delete
-	if m.confirmDelete && keyMsg.String() == "y" {
-		m = m.deleteSelected()
+	// Handle delete confirmation before any other key processing.
+	if m.confirmDelete {
+		if keyMsg.String() == "y" {
+			m = m.deleteSelected()
+		}
 		m.confirmDelete = false
 		return m, nil
 	}

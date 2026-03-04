@@ -28,6 +28,9 @@ func (ps *PromptStore) validPromptName(name string) error {
 	if name == "" {
 		return fmt.Errorf("empty prompt name")
 	}
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("invalid prompt name: %q", name)
+	}
 	p := filepath.Join(ps.basePath, name+".md")
 	cleaned := filepath.Clean(p)
 	if !strings.HasPrefix(cleaned, filepath.Clean(ps.basePath)+string(os.PathSeparator)) {
