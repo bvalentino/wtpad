@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Prompts tab**: third tab for managing reusable prompts stored in `~/.wtpad/prompts/`
+- Copy prompt to clipboard (`c`) with async write and size cap
+- Shared list pane for notes and prompts (scroll, cursor, keyboard navigation)
+
+### Changed
+
+- Tab strip renders with 1-space gaps between tabs for cleaner visual separation
+- Tightened file permissions to `0o700`/`0o600` across all stores
+
 ## [0.1.3] - 2026-03-02
 
 ### Fixed
