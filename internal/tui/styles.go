@@ -112,8 +112,7 @@ var (
 			Reverse(true)
 
 	todoDone = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")).
-			Strikethrough(true)
+			Foreground(lipgloss.Color("240"))
 
 	todoInProgress = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("214"))

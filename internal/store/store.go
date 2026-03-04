@@ -15,6 +15,7 @@ import (
 
 const (
 	todosFile   = "todos.md"
+	aiFile      = "ai.md"
 	titleFile   = "title.txt"
 	noteTimeFmt = "20060102-150405"
 )
@@ -173,6 +174,50 @@ func (s *Store) SaveTodos(todos []model.Todo) error {
 	return s.atomicWrite(todosFile, buf.String())
 }
 
+// LoadAI reads ai.md and parses GFM task list lines.
+// Returns an empty slice if the file does not exist.
+func (s *Store) LoadAI() ([]model.Todo, error) {
+	path := filepath.Join(s.basePath, aiFile)
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return []model.Todo{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var todos []model.Todo
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if todo, ok := parseTodoLine(line); ok {
+			todos = append(todos, todo)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return todos, nil
+}
+
+// ClearAI removes the ai.md file. Returns nil if the file does not exist.
+func (s *Store) ClearAI() error {
+	path := filepath.Join(s.basePath, aiFile)
+	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
+// AIExists reports whether ai.md exists on disk.
+func (s *Store) AIExists() bool {
+	path := filepath.Join(s.basePath, aiFile)
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // LoadTitle reads the title from title.txt.
 // Returns an empty string if the file does not exist.
 func (s *Store) LoadTitle() (string, error) {
@@ -215,7 +260,7 @@ func (s *Store) ListNotes() ([]model.Note, error) {
 	var notes []model.Note
 	for _, path := range entries {
 		base := filepath.Base(path)
-		if base == todosFile {
+		if base == todosFile || base == aiFile {
 			continue
 		}
 		name := strings.TrimSuffix(base, ".md")

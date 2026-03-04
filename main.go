@@ -232,6 +232,11 @@ func runTUI(s *store.Store) {
 		os.Exit(1)
 	}
 
+	aiTodos, err := s.LoadAI()
+	if err != nil {
+		aiTodos = nil // non-fatal: AI tab just won't have data
+	}
+
 	branch := gitutil.DetectBranch(".")
 	title, err := s.LoadTitle()
 	if err != nil {
@@ -246,6 +251,7 @@ func runTUI(s *store.Store) {
 		Todos:         todos,
 		Notes:         notes,
 		Prompts:       prompts,
+		AITodos:       aiTodos,
 		Branch:        branch,
 		Title:         title,
 	})
