@@ -42,7 +42,7 @@ func (s *Store) ensureDir() error {
 	_, statErr := os.Stat(s.basePath)
 	created := os.IsNotExist(statErr)
 
-	if err := os.MkdirAll(s.basePath, 0o755); err != nil {
+	if err := os.MkdirAll(s.basePath, 0o700); err != nil {
 		return err
 	}
 
@@ -244,6 +244,9 @@ func (s *Store) SaveNote(name string, body string) (string, error) {
 				}
 			}
 		}
+		if _, err := os.Stat(filepath.Join(s.basePath, name+".md")); err == nil {
+			return "", fmt.Errorf("could not generate unique note name (too many collisions)")
+		}
 	}
 
 	if err := s.validNoteName(name); err != nil {
@@ -267,15 +270,36 @@ func (s *Store) DeleteNote(name string) error {
 
 // atomicWrite writes data to a .tmp file then renames it into place.
 func (s *Store) atomicWrite(filename, data string) error {
-	target := filepath.Join(s.basePath, filename)
-	tmp := target + ".tmp"
+	return atomicWriteFile(filepath.Join(s.basePath, filename), []byte(data), 0o600)
+}
 
-	if err := os.WriteFile(tmp, []byte(data), 0o644); err != nil {
+// atomicWriteFile writes data to path via a temporary file and atomic rename.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, target); err != nil {
-		os.Remove(tmp) // best-effort cleanup
+	tmp := f.Name()
+	defer func() {
+		if tmp != "" {
+			os.Remove(tmp)
+		}
+	}()
+	if err := f.Chmod(perm); err != nil {
+		f.Close()
 		return err
 	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	tmp = "" // disarm defer; rename succeeded
 	return nil
 }

@@ -46,18 +46,16 @@ func TestNotesEmptyView(t *testing.T) {
 
 func TestNotesHeaderTimestamp(t *testing.T) {
 	ts, _ := time.Parse("20060102-150405", "20260228-143000")
-	note := model.Note{Name: "20260228-143000", CreatedAt: ts, Body: "some body"}
-	m := newNotes(nil, nil)
-	header := m.noteHeaderText(note)
+	item := listItem{Name: "20260228-143000", CreatedAt: ts, Body: "some body"}
+	header := headerText(item)
 	if header != "Feb 28 14:30" {
 		t.Errorf("header = %q, want %q", header, "Feb 28 14:30")
 	}
 }
 
 func TestNotesHeaderFromMarkdownTitle(t *testing.T) {
-	note := model.Note{Name: "20260228-143000", Body: "# My Title\nsome content"}
-	m := newNotes(nil, nil)
-	header := m.noteHeaderText(note)
+	item := listItem{Name: "20260228-143000", Body: "# My Title\nsome content"}
+	header := headerText(item)
 	if header != "My Title" {
 		t.Errorf("header = %q, want %q", header, "My Title")
 	}
@@ -178,8 +176,8 @@ func TestNotesDeleteConfirmation(t *testing.T) {
 	if m.confirmDelete {
 		t.Error("confirmation should be cancelled")
 	}
-	if len(m.notes) != 1 {
-		t.Errorf("note should not be deleted, got %d notes", len(m.notes))
+	if len(m.items) != 1 {
+		t.Errorf("note should not be deleted, got %d notes", len(m.items))
 	}
 }
 
@@ -201,8 +199,8 @@ func TestNotesDeleteConfirm(t *testing.T) {
 	if m.confirmDelete {
 		t.Error("confirmDelete should be false after confirmation")
 	}
-	if len(m.notes) != 0 {
-		t.Errorf("note should be deleted, got %d notes", len(m.notes))
+	if len(m.items) != 0 {
+		t.Errorf("note should be deleted, got %d notes", len(m.items))
 	}
 
 	// Verify it's gone from disk
@@ -293,7 +291,7 @@ func TestNotesSetNotes(t *testing.T) {
 	if m.cursor != 1 {
 		t.Errorf("cursor should be clamped to %d, got %d", 1, m.cursor)
 	}
-	if len(m.notes) != 2 {
-		t.Errorf("expected 2 notes, got %d", len(m.notes))
+	if len(m.items) != 2 {
+		t.Errorf("expected 2 notes, got %d", len(m.items))
 	}
 }

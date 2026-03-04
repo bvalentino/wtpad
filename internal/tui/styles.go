@@ -118,18 +118,18 @@ var (
 	todoInProgress = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("214"))
 
-	// Note pane styles
-	noteSelected = lipgloss.NewStyle().
+	// List pane styles (shared by notes and prompts)
+	listSelected = lipgloss.NewStyle().
 			Reverse(true)
 
-	noteHeader = lipgloss.NewStyle().
+	listHeader = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("62"))
 
-	notePreview = lipgloss.NewStyle().
+	listPreview = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245"))
 
-	noteConfirm = lipgloss.NewStyle().
+	listConfirm = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")).
 			Bold(true)
 

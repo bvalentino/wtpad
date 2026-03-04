@@ -132,9 +132,9 @@ func TestSaveTodosAtomic(t *testing.T) {
 	if err := s.SaveTodos([]model.Todo{{Text: "test"}}); err != nil {
 		t.Fatalf("SaveTodos: %v", err)
 	}
-	tmp := filepath.Join(s.Dir(), todosFile+".tmp")
-	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
-		t.Errorf("expected .tmp file to be cleaned up, got err=%v", err)
+	leftovers, _ := filepath.Glob(filepath.Join(s.Dir(), ".tmp-*"))
+	if len(leftovers) != 0 {
+		t.Errorf("expected no .tmp-* files, found: %v", leftovers)
 	}
 }
 

@@ -191,8 +191,8 @@ func TestSaveTemplateAtomicCleanup(t *testing.T) {
 	if _, err := ts.SaveTemplate("atomic", []model.Todo{{Text: "x"}}); err != nil {
 		t.Fatalf("SaveTemplate: %v", err)
 	}
-	tmp := filepath.Join(ts.basePath, "atomic.md.tmp")
-	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
-		t.Errorf("expected .tmp file to be cleaned up, got err=%v", err)
+	leftovers, _ := filepath.Glob(filepath.Join(ts.basePath, ".tmp-*"))
+	if len(leftovers) != 0 {
+		t.Errorf("expected no .tmp-* files, found: %v", leftovers)
 	}
 }

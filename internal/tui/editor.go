@@ -1,20 +1,18 @@
 package tui
 
 import (
-	"fmt"
-	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/bvalentino/wtpad/internal/store"
 )
 
-// saveNoteMsg signals root that the editor saved a note successfully.
-type saveNoteMsg struct {
-	name string
-	body string
+// editorSaveMsg signals root that the editor wants to save.
+// Root dispatches to the correct store based on the target field.
+type editorSaveMsg struct {
+	name   string // original name (empty for new)
+	body   string
+	target activeTab // which tab originated the edit
 }
 
 // exitEditorMsg signals root to leave editor mode without saving.
@@ -22,33 +20,31 @@ type exitEditorMsg struct{}
 
 type editorModel struct {
 	textarea       textarea.Model
-	store          *store.Store
 	name           string // empty = new note, non-empty = editing existing
 	initialBody    string // snapshot for dirty detection
+	entityName     string // "Note" or "Prompt" — used in overlay title
+	target         activeTab
 	width          int
 	height         int
 	confirmDiscard bool
-	err            error
 }
 
-func newEditorModel(s *store.Store) editorModel {
+func newEditorModel() editorModel {
 	ta := textarea.New()
 	ta.Placeholder = "Start writing..."
 	ta.CharLimit = 0 // no limit
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
-	return editorModel{
-		textarea: ta,
-		store:    s,
-	}
+	return editorModel{textarea: ta}
 }
 
-// openEditor prepares the editor for a new or existing note.
-func (e editorModel) openEditor(name, body string, w, h int) editorModel {
+// openEditor prepares the editor for a new or existing item.
+func (e editorModel) openEditor(name, body, entityName string, target activeTab, w, h int) editorModel {
 	e.name = name
 	e.initialBody = body
+	e.entityName = entityName
+	e.target = target
 	e.confirmDiscard = false
-	e.err = nil
 	e.textarea.SetValue(body)
 	e.textarea.Focus()
 	return e.resize(w, h)
@@ -96,14 +92,10 @@ func (e editorModel) Update(msg tea.Msg) (editorModel, tea.Cmd) {
 }
 
 func (e editorModel) save() (editorModel, tea.Cmd) {
+	name := e.name
 	body := e.textarea.Value()
-	name, err := e.store.SaveNote(e.name, body)
-	if err != nil {
-		log.Printf("wtpad: failed to save note: %v", err)
-		e.err = err
-		return e, nil
-	}
-	return e, func() tea.Msg { return saveNoteMsg{name: name, body: body} }
+	target := e.target
+	return e, func() tea.Msg { return editorSaveMsg{name: name, body: body, target: target} }
 }
 
 func (e editorModel) dirty() bool {
@@ -113,8 +105,6 @@ func (e editorModel) dirty() bool {
 // FooterHint returns the contextual hint for the editor overlay.
 func (e editorModel) FooterHint() string {
 	switch {
-	case e.err != nil:
-		return fmt.Sprintf("save failed: %v", e.err)
 	case e.confirmDiscard:
 		return "discard changes? y/n"
 	default:
@@ -128,9 +118,9 @@ func (e editorModel) View() string {
 	}
 
 	taLines := strings.Split(e.textarea.View(), "\n")
-	title := "Edit Note"
+	title := "Edit " + e.entityName
 	if e.name == "" {
-		title = "New Note"
+		title = "New " + e.entityName
 	}
 	return renderOverlayBox(title, taLines, e.width, e.height, e.FooterHint())
 }
