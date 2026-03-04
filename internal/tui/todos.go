@@ -351,11 +351,11 @@ func (m todosModel) View() string {
 	case m.inputActive:
 		bar.WriteString(m.input.View())
 	case m.confirm == confirmDelete:
-		bar.WriteString(noteConfirm.Render("Delete todo? (y to confirm)"))
+		bar.WriteString(listConfirm.Render("Delete todo? (y to confirm)"))
 	case m.confirm == confirmPurge && m.showCompleted:
-		bar.WriteString(noteConfirm.Render("Clear all completed? (y to confirm)"))
+		bar.WriteString(listConfirm.Render("Clear all completed? (y to confirm)"))
 	case m.confirm == confirmPurge && !m.showCompleted:
-		bar.WriteString(noteConfirm.Render("Clear all open todos? (y to confirm)"))
+		bar.WriteString(listConfirm.Render("Clear all open todos? (y to confirm)"))
 	case !m.showCompleted:
 		bar.WriteString(hintStyle.Render("Add Todo (a)"))
 	}

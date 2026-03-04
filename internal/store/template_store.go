@@ -118,7 +118,7 @@ func (ts *TemplateStore) SaveTemplate(name string, todos []model.Todo) (string, 
 		return "", err
 	}
 
-	if err := os.MkdirAll(ts.basePath, 0o755); err != nil {
+	if err := os.MkdirAll(ts.basePath, 0o700); err != nil {
 		return "", err
 	}
 
@@ -134,14 +134,7 @@ func (ts *TemplateStore) SaveTemplate(name string, todos []model.Todo) (string, 
 		}
 	}
 
-	target := filepath.Join(ts.basePath, name+".md")
-	tmp := target + ".tmp"
-
-	if err := os.WriteFile(tmp, []byte(buf.String()), 0o644); err != nil {
-		return "", err
-	}
-	if err := os.Rename(tmp, target); err != nil {
-		os.Remove(tmp)
+	if err := atomicWriteFile(filepath.Join(ts.basePath, name+".md"), []byte(buf.String()), 0o600); err != nil {
 		return "", err
 	}
 	return name, nil

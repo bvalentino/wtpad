@@ -220,7 +220,7 @@ func (m templateModal) View() string {
 		b.WriteString(m.input.View())
 	case tmConfirmOverwrite:
 		name := strings.TrimSpace(m.input.Value())
-		b.WriteString(noteConfirm.Render(fmt.Sprintf("Template %q already exists. Overwrite? (y/n)", name)))
+		b.WriteString(listConfirm.Render(fmt.Sprintf("Template %q already exists. Overwrite? (y/n)", name)))
 	}
 
 	content := b.String()

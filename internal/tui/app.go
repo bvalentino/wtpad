@@ -17,6 +17,7 @@ type activeTab int
 const (
 	tabTodos activeTab = iota
 	tabNotes
+	tabPrompts
 )
 
 type appMode int
@@ -67,23 +68,29 @@ type App struct {
 
 	todosPane    todosModel
 	notesPane    notesModel
+	promptsPane  promptsModel
 	editorPane   editorModel
 	viewerPane   viewerModel
 	helpPane     helpModel
 	templatePane templateModal
+
+	promptStore *store.PromptStore
 }
 
-func New(s *store.Store, ts *store.TemplateStore, todos []model.Todo, notes []model.Note, branch string) App {
+func New(s *store.Store, ts *store.TemplateStore, ps *store.PromptStore, todos []model.Todo, notes []model.Note, prompts []model.Note, branch string) App {
 	tp := newTodos(todos, s)
 	np := newNotes(notes, s)
+	pp := newPrompts(prompts, ps)
 	return App{
 		store:        s,
+		promptStore:  ps,
 		activeTab:    tabTodos,
 		mode:         modeNormal,
 		branch:       branch,
 		todosPane:    tp,
 		notesPane:    np,
-		editorPane:   newEditorModel(s),
+		promptsPane:  pp,
+		editorPane:   newEditorModel(),
 		templatePane: newTemplateModal(ts),
 	}
 }
@@ -94,6 +101,13 @@ func (a App) Init() tea.Cmd {
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
+	case clearPromptStatusMsg:
+		a.promptsPane, _ = a.promptsPane.Update(msg)
+		return a, nil
+	case clipboardResultMsg:
+		var cmd tea.Cmd
+		a.promptsPane, cmd = a.promptsPane.Update(msg)
+		return a, cmd
 	case enterInputMsg:
 		a.mode = modeInput
 		return a, nil
@@ -111,20 +125,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case enterEditorMsg:
 		m := msg.(enterEditorMsg)
 		a.editorReturnMode = a.mode
-		a.editorPane = a.editorPane.openEditor(m.name, m.body, a.width, a.height)
+		entityName := "Note"
+		if a.activeTab == tabPrompts {
+			entityName = "Prompt"
+		}
+		a.editorPane = a.editorPane.openEditor(m.name, m.body, entityName, a.activeTab, a.width, a.height)
 		a.mode = modeEditor
 		return a, nil
-	case saveNoteMsg:
-		m := msg.(saveNoteMsg)
-		notes, err := a.store.ListNotes()
-		if err != nil {
-			log.Printf("wtpad: failed to list notes after save: %v", err)
-		} else {
-			a.notesPane = a.notesPane.SetNotes(notes)
-		}
-		// Always open the viewer after saving
-		a.viewerPane = a.viewerPane.openViewer(m.name, m.body, a.width, a.height)
-		a.mode = modeViewer
+	case editorSaveMsg:
+		a = a.handleEditorSave(msg.(editorSaveMsg))
 		return a, nil
 	case exitEditorMsg:
 		if a.editorReturnMode == modeViewer {
@@ -187,9 +196,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.mode == modeNormal {
 			switch msg.String() {
 			case "tab":
-				if a.activeTab == tabTodos {
+				switch a.activeTab {
+				case tabTodos:
 					a = a.switchTab(tabNotes)
-				} else {
+				case tabNotes:
+					a = a.switchTab(tabPrompts)
+				case tabPrompts:
 					a = a.switchTab(tabTodos)
 				}
 				return a, nil
@@ -236,6 +248,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.todosPane, cmd = a.todosPane.Update(msg)
 	case tabNotes:
 		a.notesPane, cmd = a.notesPane.Update(msg)
+	case tabPrompts:
+		a.promptsPane, cmd = a.promptsPane.Update(msg)
 	}
 	return a, cmd
 }
@@ -288,24 +302,30 @@ func (a App) renderHeader() string {
 }
 
 // renderTabStrip returns the 3-line tab chrome.
-// Lines 1-2 (top border + label) are rendered by lipgloss borders.
-// Line 3 (connection to content area) is manually constructed so that
-// the tab opening flows seamlessly into the content box.
+// Lines 1-2 (top border + label) are rendered by lipgloss borders with a
+// 1-space gap between tabs. Line 3 (connection to content area) is manually
+// constructed so the active tab opening flows into the content box.
 func (a App) renderTabStrip() string {
 	todoLabel := "Todo"
 	noteLabel := "Notes"
+	promptLabel := "Prompts"
 
-	var todoTab, noteTab string
-	if a.activeTab == tabTodos {
-		todoTab = activeTabStyle.Render(todoLabel)
-		noteTab = inactiveTabStyle.Render(noteLabel)
-	} else {
-		todoTab = inactiveTabStyle.Render(todoLabel)
-		noteTab = activeTabStyle.Render(noteLabel)
+	renderTab := func(label string, active bool) string {
+		if active {
+			return activeTabStyle.Render(label)
+		}
+		return inactiveTabStyle.Render(label)
 	}
 
-	// Lines 1-2: join the two tabs (each 2 lines: top border + label row)
-	row := lipgloss.JoinHorizontal(lipgloss.Top, todoTab, noteTab)
+	todoTab := renderTab(todoLabel, a.activeTab == tabTodos)
+	noteTab := renderTab(noteLabel, a.activeTab == tabNotes)
+	promptTab := renderTab(promptLabel, a.activeTab == tabPrompts)
+
+	// Lines 1-2: join tabs with a 1-space gap
+	gap := lipgloss.NewStyle().Width(1)
+	row := lipgloss.JoinHorizontal(lipgloss.Top,
+		todoTab, gap.Render(" "), noteTab, gap.Render(" "), promptTab,
+	)
 
 	// Pad lines 1-2 to terminal width
 	rowLines := strings.Split(row, "\n")
@@ -316,29 +336,40 @@ func (a App) renderTabStrip() string {
 	}
 
 	// Line 3: content top border with opening under the active tab.
-	// Each tab's display width includes left border (1) + padding (1) +
-	// label + padding (1) + right border (1). Inner width = displayW - 2.
+	// Each tab's display width = left border(1) + pad(1) + label + pad(1) + right border(1).
+	// Inner width = displayW - 2. The 1-space gaps become ─ on the connection line.
 	todoW := lipgloss.Width(todoTab)
 	noteW := lipgloss.Width(noteTab)
+	promptW := lipgloss.Width(promptTab)
 	todoInner := todoW - 2
 	noteInner := noteW - 2
+	promptInner := promptW - 2
 
-	gapFill := a.width - todoW - noteW - 1 // -1 for the ╮ at right edge
-	if gapFill < 0 {
-		gapFill = 0
+	// tabsSpan = total columns consumed by tabs + gaps (2 gaps of 1 char each)
+	tabsSpan := todoW + 1 + noteW + 1 + promptW
+
+	fill := a.width - tabsSpan
+	if fill < 0 {
+		fill = 0
 	}
 
 	var line3 string
-	if a.activeTab == tabTodos {
-		// │<spaces>╰┴<dashes>┴<dashes>╮
+	switch a.activeTab {
+	case tabTodos:
 		line3 = "│" + strings.Repeat(" ", todoInner) +
-			"╰┴" + strings.Repeat("─", noteInner) + "┴" +
-			strings.Repeat("─", gapFill) + "╮"
-	} else {
-		// ├<dashes>┴╯<spaces>╰<dashes>╮
+			"╰─┴" + strings.Repeat("─", noteInner) +
+			"┴─┴" + strings.Repeat("─", promptInner) +
+			"┴" + strings.Repeat("─", fill) + "╮"
+	case tabNotes:
 		line3 = "├" + strings.Repeat("─", todoInner) +
-			"┴╯" + strings.Repeat(" ", noteInner) + "╰" +
-			strings.Repeat("─", gapFill) + "╮"
+			"┴─╯" + strings.Repeat(" ", noteInner) +
+			"╰─┴" + strings.Repeat("─", promptInner) +
+			"┴" + strings.Repeat("─", fill) + "╮"
+	case tabPrompts:
+		line3 = "├" + strings.Repeat("─", todoInner) +
+			"┴─┴" + strings.Repeat("─", noteInner) +
+			"┴─╯" + strings.Repeat(" ", promptInner) +
+			"╰" + strings.Repeat("─", fill) + "╮"
 	}
 	line3 = dimBorder.Render(line3)
 
@@ -353,6 +384,8 @@ func (a App) renderContent() string {
 		content = a.todosPane.View()
 	case tabNotes:
 		content = a.notesPane.View()
+	case tabPrompts:
+		content = a.promptsPane.View()
 	}
 
 	// Split content into lines and pad/frame each with side borders
@@ -385,36 +418,53 @@ func (a App) renderContent() string {
 
 // renderFooter returns the footer line with mode-aware hints.
 func (a App) renderFooter() string {
-	c := a.todosPane.Counts()
-	var counts string
-	if a.todosPane.ShowingCompleted() {
-		counts = fmt.Sprintf("viewing %d done", c.Done)
-	} else {
-		parts := []string{fmt.Sprintf("%d open", c.Open)}
-		if c.InProgress > 0 {
-			parts = append(parts, fmt.Sprintf("%d in progress", c.InProgress))
+	var counts, hint string
+
+	switch a.activeTab {
+	case tabPrompts:
+		counts = pluralize(a.promptsPane.count(), "prompt")
+		if msg := a.promptsPane.StatusMsg(); msg != "" {
+			return footerStyle.Render(counts + " · " + msg)
 		}
-		parts = append(parts, fmt.Sprintf("%d done", c.Done))
-		counts = strings.Join(parts, " · ")
-	}
+		hint = "? help · tab switch · q quit"
 
-	if msg := a.todosPane.StatusMsg(); msg != "" {
-		return footerStyle.Render(counts + " · " + msg)
-	}
+	case tabNotes:
+		counts = pluralize(a.notesPane.count(), "note")
+		hint = "? help · tab switch · q quit"
 
-	var hint string
-	switch a.mode {
-	case modeInput:
-		hint = "enter confirm · esc cancel"
-	case modeHelp:
-		hint = "esc close"
-	case modeTemplate:
-		hint = a.templatePane.FooterHint()
-	default:
-		hint = a.todosPane.FooterHint()
+	case tabTodos:
+		c := a.todosPane.Counts()
+		if a.todosPane.ShowingCompleted() {
+			counts = fmt.Sprintf("viewing %d done", c.Done)
+		} else {
+			parts := []string{fmt.Sprintf("%d open", c.Open)}
+			if c.InProgress > 0 {
+				parts = append(parts, fmt.Sprintf("%d in progress", c.InProgress))
+			}
+			parts = append(parts, fmt.Sprintf("%d done", c.Done))
+			counts = strings.Join(parts, " · ")
+		}
+		if msg := a.todosPane.StatusMsg(); msg != "" {
+			return footerStyle.Render(counts + " · " + msg)
+		}
+		switch a.mode {
+		case modeInput:
+			hint = "enter confirm · esc cancel"
+		case modeTemplate:
+			hint = a.templatePane.FooterHint()
+		default:
+			hint = a.todosPane.FooterHint()
+		}
 	}
 
 	return footerStyle.Render(counts + " · " + hint)
+}
+
+func pluralize(n int, singular string) string {
+	if n == 1 {
+		return "1 " + singular
+	}
+	return fmt.Sprintf("%d %ss", n, singular)
 }
 
 // layoutVertical computes dimensions for the vertical layout.
@@ -440,6 +490,43 @@ func (a App) layoutVertical() App {
 
 	a.todosPane = a.todosPane.SetSize(a.contentWidth, a.contentHeight)
 	a.notesPane = a.notesPane.SetSize(a.contentWidth, a.contentHeight)
+	a.promptsPane = a.promptsPane.SetSize(a.contentWidth, a.contentHeight)
+	return a
+}
+
+// handleEditorSave saves the editor content to the correct store based on the
+// message's target field, refreshes the pane, and transitions to the viewer.
+func (a App) handleEditorSave(m editorSaveMsg) App {
+	var name string
+	var err error
+
+	if m.target == tabPrompts {
+		name, err = a.promptStore.SavePrompt(m.name, m.body)
+	} else {
+		name, err = a.store.SaveNote(m.name, m.body)
+	}
+	if err != nil {
+		log.Printf("wtpad: failed to save: %v", err)
+		a.mode = modeNormal
+		return a
+	}
+
+	if m.target == tabPrompts {
+		if prompts, err := a.promptStore.ListPrompts(); err != nil {
+			log.Printf("wtpad: failed to list prompts after save: %v", err)
+		} else {
+			a.promptsPane = a.promptsPane.SetPrompts(prompts)
+		}
+	} else {
+		if notes, err := a.store.ListNotes(); err != nil {
+			log.Printf("wtpad: failed to list notes after save: %v", err)
+		} else {
+			a.notesPane = a.notesPane.SetNotes(notes)
+		}
+	}
+
+	a.viewerPane = a.viewerPane.openViewer(name, m.body, a.width, a.height)
+	a.mode = modeViewer
 	return a
 }
 
@@ -448,5 +535,6 @@ func (a App) switchTab(tab activeTab) App {
 	a.activeTab = tab
 	a.todosPane = a.todosPane.SetFocus(tab == tabTodos)
 	a.notesPane = a.notesPane.SetFocus(tab == tabNotes)
+	a.promptsPane = a.promptsPane.SetFocus(tab == tabPrompts)
 	return a
 }

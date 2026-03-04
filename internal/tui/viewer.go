@@ -21,12 +21,6 @@ func noteDisplayName(name string) string {
 	return name
 }
 
-// enterViewerMsg signals root to switch to modeViewer.
-type enterViewerMsg struct {
-	name string
-	body string
-}
-
 // exitViewerMsg signals root to leave viewer mode.
 type exitViewerMsg struct{}
 

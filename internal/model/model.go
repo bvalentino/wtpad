@@ -23,3 +23,4 @@ type Note struct {
 	Body      string    // full markdown content
 	CreatedAt time.Time // parsed from the filename timestamp
 }
+

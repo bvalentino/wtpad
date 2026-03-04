@@ -67,6 +67,14 @@ func (h helpModel) View() string {
 			{"e", "Edit selected"},
 			{"x", "Delete selected"},
 		}},
+		{"Prompts", []struct{ key, desc string }{
+			{"↑ / ↓", "Navigate"},
+			{"c", "Copy to clipboard"},
+			{"Enter", "View selected"},
+			{"a", "New prompt"},
+			{"e", "Edit selected"},
+			{"x", "Delete selected"},
+		}},
 		{"Viewer / Editor", []struct{ key, desc string }{
 			{"e", "Edit (viewer)"},
 			{"Ctrl+S", "Save (editor)"},
