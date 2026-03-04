@@ -88,7 +88,7 @@ func (m promptsModel) Update(msg tea.Msg) (promptsModel, tea.Cmd) {
 			return m, clearPromptStatusAfter(2 * time.Second)
 		}
 		if item := m.selectedItem(); item != nil {
-			body := item.Body
+			_, body, _ := splitHeadingAndBody(item.Body)
 			if len(body) > maxClipboardSize {
 				body = strings.ToValidUTF8(body[:maxClipboardSize], "")
 				m.statusMsg = "Copying (truncated to 1 MB)…"
