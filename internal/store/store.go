@@ -15,6 +15,7 @@ import (
 
 const (
 	todosFile   = "todos.md"
+	titleFile   = "title.txt"
 	noteTimeFmt = "20060102-150405"
 )
 
@@ -170,6 +171,36 @@ func (s *Store) SaveTodos(todos []model.Todo) error {
 	}
 
 	return s.atomicWrite(todosFile, buf.String())
+}
+
+// LoadTitle reads the title from title.txt.
+// Returns an empty string if the file does not exist.
+func (s *Store) LoadTitle() (string, error) {
+	data, err := os.ReadFile(filepath.Join(s.basePath, titleFile))
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// SaveTitle persists a title to title.txt. An empty string removes the file.
+func (s *Store) SaveTitle(title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		path := filepath.Join(s.basePath, titleFile)
+		err := os.Remove(path)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if err := s.ensureDir(); err != nil {
+		return err
+	}
+	return s.atomicWrite(titleFile, title)
 }
 
 // ListNotes scans .wtpad/ for note files, excluding todos.md.

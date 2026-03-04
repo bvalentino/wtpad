@@ -46,6 +46,8 @@ func main() {
 		cmdNote(s, args[1:])
 	case "done":
 		cmdDone(s, args[1:])
+	case "title":
+		cmdTitle(s, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", args[0])
 		printUsage()
@@ -167,6 +169,42 @@ func cmdDone(s *store.Store, args []string) {
 	fmt.Printf("Done: %s\n", todos[found].Text)
 }
 
+func cmdTitle(s *store.Store, args []string) {
+	if len(args) == 0 {
+		title, err := s.LoadTitle()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if title == "" {
+			fmt.Println("No title set.")
+		} else {
+			fmt.Println(title)
+		}
+		return
+	}
+
+	if args[0] == "--clear" {
+		if err := s.SaveTitle(""); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Title cleared.")
+		return
+	}
+
+	title := strings.Join(args, " ")
+	if runes := []rune(title); len(runes) > 40 {
+		fmt.Fprintf(os.Stderr, "Error: title too long (max 40 characters)\n")
+		os.Exit(1)
+	}
+	if err := s.SaveTitle(title); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Title set: %s\n", title)
+}
+
 func runTUI(s *store.Store) {
 	todos, err := s.LoadTodos()
 	if err != nil {
@@ -195,8 +233,22 @@ func runTUI(s *store.Store) {
 	}
 
 	branch := gitutil.DetectBranch(".")
+	title, err := s.LoadTitle()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 
-	app := tui.New(s, ts, ps, todos, notes, prompts, branch)
+	app := tui.New(tui.AppConfig{
+		Store:         s,
+		TemplateStore: ts,
+		PromptStore:   ps,
+		Todos:         todos,
+		Notes:         notes,
+		Prompts:       prompts,
+		Branch:        branch,
+		Title:         title,
+	})
 	if _, err := tea.NewProgram(app, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -211,6 +263,9 @@ Commands:
   ls            List todos
   note <text>   Create a new note
   done <n>      Mark todo #n done
+  title <text>  Set a title shown above the logo
+  title --clear Remove the title
+  title         Show the current title
 
 Run without arguments to start the TUI.`)
 }

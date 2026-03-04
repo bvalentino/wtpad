@@ -30,9 +30,33 @@ func tempPromptStoreForApp(t *testing.T) *store.PromptStore {
 	return store.NewPromptStore(filepath.Join(t.TempDir(), "prompts"))
 }
 
+// testApp creates an App with sensible defaults for testing.
+// Override fields by modifying the returned AppConfig before calling New.
+func testApp(t *testing.T, todos []model.Todo) App {
+	t.Helper()
+	return New(AppConfig{
+		Store:         tempStore(t),
+		TemplateStore: tempTemplateStoreForApp(t),
+		PromptStore:   tempPromptStoreForApp(t),
+		Todos:         todos,
+		Branch:        "main",
+	})
+}
+
+func testAppWithTitle(t *testing.T, todos []model.Todo, title string) App {
+	t.Helper()
+	return New(AppConfig{
+		Store:         tempStore(t),
+		TemplateStore: tempTemplateStoreForApp(t),
+		PromptStore:   tempPromptStoreForApp(t),
+		Todos:         todos,
+		Branch:        "main",
+		Title:         title,
+	})
+}
+
 func TestViewBeforeWindowSizeMsg(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), []model.Todo{{Text: "task"}}, nil, nil, "main")
+	app := testApp(t, []model.Todo{{Text: "task"}})
 
 	// View() is called before any WindowSizeMsg, so width/height are 0.
 	// This must not panic — returns empty string gracefully.
@@ -49,8 +73,7 @@ func sendResize(t *testing.T, m tea.Model, w, h int) App {
 }
 
 func TestResizePropagatesBothPanes(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), []model.Todo{{Text: "task"}}, nil, nil, "main")
+	app := testApp(t, []model.Todo{{Text: "task"}})
 
 	app = sendResize(t, app, 80, 40)
 
@@ -70,8 +93,7 @@ func TestResizePropagatesBothPanes(t *testing.T) {
 }
 
 func TestResizeSmallTerminal(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), []model.Todo{{Text: "task"}}, nil, nil, "main")
+	app := testApp(t, []model.Todo{{Text: "task"}})
 
 	// Very small terminal — must not panic
 	app = sendResize(t, app, 10, 5)
@@ -91,8 +113,7 @@ func TestResizeSmallTerminal(t *testing.T) {
 }
 
 func TestResizeHeaderToggle(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), nil, nil, nil, "main")
+	app := testApp(t, nil)
 
 	// Tall terminal: full ASCII header
 	app = sendResize(t, app, 80, 40)
@@ -114,9 +135,8 @@ func TestResizeHeaderToggle(t *testing.T) {
 }
 
 func TestRapidResize(t *testing.T) {
-	s := tempStore(t)
 	todos := []model.Todo{{Text: "task 1"}, {Text: "task 2"}}
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), todos, nil, nil, "main")
+	app := testApp(t, todos)
 
 	// Simulate rapid resize — no panics, valid state after each
 	sizes := [][2]int{
@@ -133,8 +153,7 @@ func TestRapidResize(t *testing.T) {
 }
 
 func TestResizeInEditorMode(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), nil, nil, nil, "main")
+	app := testApp(t, nil)
 
 	// Set initial size, then enter editor
 	app = sendResize(t, app, 80, 40)
@@ -163,8 +182,7 @@ func TestResizeInEditorMode(t *testing.T) {
 }
 
 func TestResizeInHelpMode(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), nil, nil, nil, "main")
+	app := testApp(t, nil)
 
 	// Set initial size
 	app = sendResize(t, app, 80, 40)
@@ -199,8 +217,7 @@ func TestResizeInHelpMode(t *testing.T) {
 }
 
 func TestEditorRendersFullScreen(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), nil, nil, nil, "main")
+	app := testApp(t, nil)
 
 	app = sendResize(t, app, 80, 40)
 	updated, _ := app.Update(enterEditorMsg{name: "", body: "hello"})
@@ -233,8 +250,7 @@ func TestEditorRendersFullScreen(t *testing.T) {
 }
 
 func TestEditorFooterShowsContextualHints(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), nil, nil, nil, "main")
+	app := testApp(t, nil)
 
 	app = sendResize(t, app, 80, 40)
 	updated, _ := app.Update(enterEditorMsg{name: "", body: "hello"})
@@ -253,8 +269,7 @@ func TestEditorFooterShowsContextualHints(t *testing.T) {
 }
 
 func TestEditorDimensionsMatchTerminal(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), nil, nil, nil, "main")
+	app := testApp(t, nil)
 
 	app = sendResize(t, app, 80, 40)
 	updated, _ := app.Update(enterEditorMsg{name: "", body: "test"})
@@ -270,9 +285,8 @@ func TestEditorDimensionsMatchTerminal(t *testing.T) {
 }
 
 func TestToggleInProgress(t *testing.T) {
-	s := tempStore(t)
 	todos := []model.Todo{{Text: "task 1"}, {Text: "task 2"}}
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), todos, nil, nil, "main")
+	app := testApp(t, todos)
 	app = sendResize(t, app, 80, 40)
 
 	// Press 'p' to toggle first todo to in-progress
@@ -295,9 +309,8 @@ func TestToggleInProgress(t *testing.T) {
 }
 
 func TestToggleInProgressOnDoneIsNoOp(t *testing.T) {
-	s := tempStore(t)
 	todos := []model.Todo{{Text: "done task", Status: model.StatusDone}}
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), todos, nil, nil, "main")
+	app := testApp(t, todos)
 	app = sendResize(t, app, 80, 40)
 
 	// Press 'p' on a done item — should be a no-op
@@ -310,9 +323,8 @@ func TestToggleInProgressOnDoneIsNoOp(t *testing.T) {
 }
 
 func TestToggleDoneClearsInProgress(t *testing.T) {
-	s := tempStore(t)
 	todos := []model.Todo{{Text: "wip task", Status: model.StatusInProgress}}
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), todos, nil, nil, "main")
+	app := testApp(t, todos)
 	app = sendResize(t, app, 80, 40)
 
 	// Press space to mark in-progress item as done
@@ -345,13 +357,12 @@ func TestSortTodosThreeGroups(t *testing.T) {
 }
 
 func TestViewRendersInProgressPrefix(t *testing.T) {
-	s := tempStore(t)
 	todos := []model.Todo{
 		{Text: "open task"},
 		{Text: "wip task", Status: model.StatusInProgress},
 		{Text: "done task", Status: model.StatusDone},
 	}
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), todos, nil, nil, "main")
+	app := testApp(t, todos)
 	app = sendResize(t, app, 80, 40)
 
 	out := app.View()
@@ -381,13 +392,12 @@ func TestViewRendersInProgressPrefix(t *testing.T) {
 }
 
 func TestFooterCountsWithInProgress(t *testing.T) {
-	s := tempStore(t)
 	todos := []model.Todo{
 		{Text: "open"},
 		{Text: "wip", Status: model.StatusInProgress},
 		{Text: "done", Status: model.StatusDone},
 	}
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), todos, nil, nil, "main")
+	app := testApp(t, todos)
 	app = sendResize(t, app, 80, 40)
 
 	out := app.View()
@@ -404,12 +414,11 @@ func TestFooterCountsWithInProgress(t *testing.T) {
 }
 
 func TestFooterOmitsInProgressWhenZero(t *testing.T) {
-	s := tempStore(t)
 	todos := []model.Todo{
 		{Text: "open"},
 		{Text: "done", Status: model.StatusDone},
 	}
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), todos, nil, nil, "main")
+	app := testApp(t, todos)
 	app = sendResize(t, app, 80, 40)
 
 	out := app.View()
@@ -420,8 +429,7 @@ func TestFooterOmitsInProgressWhenZero(t *testing.T) {
 }
 
 func TestResizeContentDimensions(t *testing.T) {
-	s := tempStore(t)
-	app := New(s, tempTemplateStoreForApp(t), tempPromptStoreForApp(t), nil, nil, nil, "main")
+	app := testApp(t, nil)
 
 	app = sendResize(t, app, 80, 40)
 
@@ -436,5 +444,178 @@ func TestResizeContentDimensions(t *testing.T) {
 	expectedWidth := 80 - sideBorderSize - 2
 	if app.contentWidth != expectedWidth {
 		t.Errorf("contentWidth = %d, want %d", app.contentWidth, expectedWidth)
+	}
+}
+
+func TestTitleRendersOverlaidOnLogo(t *testing.T) {
+	app := testAppWithTitle(t, nil, "My Project")
+
+	app = sendResize(t, app, 80, 40)
+	out := app.View()
+
+	if !strings.Contains(out, "My Project") {
+		t.Error("expected title 'My Project' in view")
+	}
+	// Title box should overlay the ASCII art with box-drawing borders
+	if !strings.Contains(out, "┏") {
+		t.Error("title box should contain ┏ top border")
+	}
+	if !strings.Contains(out, "┃") {
+		t.Error("title box should contain ┃ side borders")
+	}
+	if !strings.Contains(out, "┗") {
+		t.Error("title box should contain ┗ bottom border")
+	}
+}
+
+func TestNoTitleOmitsTitleLine(t *testing.T) {
+	app := testApp(t, nil)
+
+	app = sendResize(t, app, 80, 40)
+	out := app.View()
+
+	// Without a title, the header should just be the ASCII logo
+	lines := strings.Split(out, "\n")
+	// First line should be part of the ASCII art, not empty
+	if strings.TrimSpace(lines[0]) == "" {
+		t.Error("first line should not be empty when no title is set")
+	}
+}
+
+func TestTitleDoesNotAffectHeaderHeight(t *testing.T) {
+	appNoTitle := testApp(t, nil)
+	appNoTitle = sendResize(t, appNoTitle, 80, 40)
+
+	appWithTitle := testAppWithTitle(t, nil, "My Project")
+	appWithTitle = sendResize(t, appWithTitle, 80, 40)
+
+	if appWithTitle.headerHeight != appNoTitle.headerHeight {
+		t.Errorf("headerHeight with title = %d, want %d (same as no title)", appWithTitle.headerHeight, appNoTitle.headerHeight)
+	}
+	if appWithTitle.contentHeight != appNoTitle.contentHeight {
+		t.Errorf("contentHeight with title = %d, want %d (same as no title)", appWithTitle.contentHeight, appNoTitle.contentHeight)
+	}
+}
+
+func TestTitleInputMode(t *testing.T) {
+	app := testApp(t, nil)
+	app = sendResize(t, app, 80, 40)
+
+	// Press 't' enters modeTitleInput
+	updated, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	app = updated.(App)
+	if app.mode != modeTitleInput {
+		t.Fatalf("expected modeTitleInput, got %d", app.mode)
+	}
+	if cmd == nil {
+		t.Error("expected blink command from title input")
+	}
+}
+
+func TestTitleInputEnterSaves(t *testing.T) {
+	app := testApp(t, nil)
+	app = sendResize(t, app, 80, 40)
+
+	// Enter title input mode
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	app = updated.(App)
+
+	// Type a title
+	for _, r := range "My Project" {
+		updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		app = updated.(App)
+	}
+
+	// Press enter to confirm
+	updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	app = updated.(App)
+
+	if app.mode != modeNormal {
+		t.Errorf("expected modeNormal after enter, got %d", app.mode)
+	}
+	if app.title != "My Project" {
+		t.Errorf("expected title 'My Project', got %q", app.title)
+	}
+
+	// Title should appear in view
+	out := app.View()
+	if !strings.Contains(out, "My Project") {
+		t.Error("title should appear in rendered view after setting")
+	}
+}
+
+func TestTitleInputEscCancels(t *testing.T) {
+	app := testAppWithTitle(t, nil, "Original")
+	app = sendResize(t, app, 80, 40)
+
+	// Enter title input mode
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	app = updated.(App)
+
+	// Type something different
+	for _, r := range "Changed" {
+		updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		app = updated.(App)
+	}
+
+	// Press esc to cancel
+	updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	app = updated.(App)
+
+	if app.mode != modeNormal {
+		t.Errorf("expected modeNormal after esc, got %d", app.mode)
+	}
+	if app.title != "Original" {
+		t.Errorf("expected title to remain 'Original', got %q", app.title)
+	}
+}
+
+func TestTitleInputPersists(t *testing.T) {
+	s := tempStore(t)
+	app := New(AppConfig{
+		Store:         s,
+		TemplateStore: tempTemplateStoreForApp(t),
+		PromptStore:   tempPromptStoreForApp(t),
+		Branch:        "main",
+	})
+	app = sendResize(t, app, 80, 40)
+
+	// Set title via TUI
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	app = updated.(App)
+	for _, r := range "Persisted Title" {
+		updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		app = updated.(App)
+	}
+	updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	app = updated.(App)
+
+	// Verify store has the title
+	title, err := s.LoadTitle()
+	if err != nil {
+		t.Fatalf("LoadTitle: %v", err)
+	}
+	if title != "Persisted Title" {
+		t.Errorf("expected persisted title 'Persisted Title', got %q", title)
+	}
+}
+
+func TestTitleCompactHeader(t *testing.T) {
+	app := testAppWithTitle(t, nil, "My Project")
+
+	// Short terminal — compact header
+	app = sendResize(t, app, 80, 20)
+
+	if app.showFullHeader {
+		t.Error("expected compact header for short terminal")
+	}
+	// headerHeight should be 1 (title overlaid, not extra line)
+	if app.headerHeight != 1 {
+		t.Errorf("headerHeight = %d, want 1 (compact with overlaid title)", app.headerHeight)
+	}
+
+	out := app.View()
+	if !strings.Contains(out, "My Project") {
+		t.Error("title should appear in compact header mode too")
 	}
 }

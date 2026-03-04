@@ -410,6 +410,65 @@ func TestAutoExcludeLinkedWorktree(t *testing.T) {
 	}
 }
 
+func loadTitle(t *testing.T, s *Store) string {
+	t.Helper()
+	got, err := s.LoadTitle()
+	if err != nil {
+		t.Fatalf("LoadTitle: %v", err)
+	}
+	return got
+}
+
+func TestTitleRoundTrip(t *testing.T) {
+	s := tempStore(t)
+
+	// No title set initially
+	if got := loadTitle(t, s); got != "" {
+		t.Errorf("LoadTitle() = %q, want empty", got)
+	}
+
+	// Set a title
+	if err := s.SaveTitle("My Project"); err != nil {
+		t.Fatalf("SaveTitle: %v", err)
+	}
+	if got := loadTitle(t, s); got != "My Project" {
+		t.Errorf("LoadTitle() = %q, want %q", got, "My Project")
+	}
+
+	// Clear the title
+	if err := s.SaveTitle(""); err != nil {
+		t.Fatalf("SaveTitle (clear): %v", err)
+	}
+	if got := loadTitle(t, s); got != "" {
+		t.Errorf("LoadTitle() after clear = %q, want empty", got)
+	}
+}
+
+func TestSaveTitleTrimsWhitespace(t *testing.T) {
+	s := tempStore(t)
+	if err := s.SaveTitle("  padded title  "); err != nil {
+		t.Fatalf("SaveTitle: %v", err)
+	}
+	if got := loadTitle(t, s); got != "padded title" {
+		t.Errorf("LoadTitle() = %q, want %q", got, "padded title")
+	}
+}
+
+func TestSaveTitleWhitespaceOnlyClears(t *testing.T) {
+	s := tempStore(t)
+	// Set a title first
+	if err := s.SaveTitle("has title"); err != nil {
+		t.Fatalf("SaveTitle: %v", err)
+	}
+	// Saving whitespace-only should clear
+	if err := s.SaveTitle("   "); err != nil {
+		t.Fatalf("SaveTitle (whitespace): %v", err)
+	}
+	if got := loadTitle(t, s); got != "" {
+		t.Errorf("LoadTitle() = %q, want empty after whitespace-only save", got)
+	}
+}
+
 func TestAutoExcludeNoGitDir(t *testing.T) {
 	// No .git/ directory — should silently skip without error
 	s := tempStore(t)
