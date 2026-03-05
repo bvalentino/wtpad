@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Long titles word-wrap into up to 3 lines inside the box
   - Compact header (short terminals) shows the title right-aligned
   - CLI: `wtpad title <text>`, `wtpad title --clear`, `wtpad title` (show current)
+- Help overlay (`?`) now supports scrolling with `↑/↓/j/k/PgUp/PgDn` for small terminals
 
 ### Fixed
 

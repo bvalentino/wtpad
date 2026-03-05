@@ -1,10 +1,7 @@
 package tui
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // enterHelpMsg signals root to enter help mode from an overlay.
@@ -14,29 +11,88 @@ type enterHelpMsg struct{}
 type exitHelpMsg struct{}
 
 type helpModel struct {
-	width  int
-	height int
+	lines        []string
+	scrollOffset int
+	width        int
+	height       int
+}
+
+func (m helpModel) open(w, h int) helpModel {
+	m.scrollOffset = 0
+	return m.resize(w, h)
 }
 
 func (m helpModel) resize(w, h int) helpModel {
 	m.width = w
 	m.height = h
+	m.lines = m.buildLines()
+	m = m.clampScroll()
 	return m
 }
 
 func (h helpModel) Update(msg tea.Msg) (helpModel, tea.Cmd) {
-	if _, ok := msg.(tea.KeyMsg); ok {
-		return h, func() tea.Msg { return exitHelpMsg{} }
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return h, nil
 	}
+
+	contentH := overlayContentHeight(h.height)
+
+	switch keyMsg.String() {
+	case "esc", "q", "?":
+		return h, func() tea.Msg { return exitHelpMsg{} }
+	case "up", "k":
+		if h.scrollOffset > 0 {
+			h.scrollOffset--
+		}
+	case "down", "j":
+		h.scrollOffset++
+		h = h.clampScroll()
+	case "pgup":
+		h.scrollOffset -= contentH
+		if h.scrollOffset < 0 {
+			h.scrollOffset = 0
+		}
+	case "pgdown":
+		h.scrollOffset += contentH
+		h = h.clampScroll()
+	}
+
 	return h, nil
 }
 
 func (h helpModel) View() string {
-	var b strings.Builder
+	if h.width == 0 || h.height == 0 {
+		return ""
+	}
 
-	b.WriteString(helpTitle.Render("wtpad — keyboard shortcuts"))
-	b.WriteString("\n\n")
+	visible := h.lines
+	if h.scrollOffset < len(visible) {
+		visible = visible[h.scrollOffset:]
+	} else {
+		visible = nil
+	}
 
+	return renderOverlayBox("Keyboard Shortcuts", visible, h.width, h.height, h.FooterHint())
+}
+
+// FooterHint returns the contextual hint for the help overlay.
+func (h helpModel) FooterHint() string {
+	return "Scroll (↑↓) · Close (esc)"
+}
+
+func (h helpModel) clampScroll() helpModel {
+	maxOffset := len(h.lines) - overlayContentHeight(h.height)
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if h.scrollOffset > maxOffset {
+		h.scrollOffset = maxOffset
+	}
+	return h
+}
+
+func (h helpModel) buildLines() []string {
 	sections := []struct {
 		name string
 		keys []struct{ key, desc string }
@@ -83,38 +139,19 @@ func (h helpModel) View() string {
 		}},
 	}
 
+	var lines []string
+
 	for i, s := range sections {
-		b.WriteString(helpSection.Render(s.name))
-		b.WriteString("\n")
+		lines = append(lines, helpSection.Render(s.name))
 		for _, k := range s.keys {
 			key := helpKey.Width(12).Render(k.key)
 			desc := helpDesc.Render(k.desc)
-			b.WriteString("  " + key + desc + "\n")
+			lines = append(lines, "  "+key+desc)
 		}
 		if i < len(sections)-1 {
-			b.WriteString("\n")
+			lines = append(lines, "")
 		}
 	}
 
-	content := b.String()
-
-	// Center the content block in the terminal.
-	contentWidth := lipgloss.Width(content)
-	contentHeight := strings.Count(content, "\n") + 1
-
-	padLeft := 0
-	if h.width > contentWidth {
-		padLeft = (h.width - contentWidth) / 2
-	}
-	padTop := 0
-	if h.height > contentHeight {
-		padTop = (h.height - contentHeight) / 2
-	}
-
-	return lipgloss.NewStyle().
-		PaddingLeft(padLeft).
-		PaddingTop(padTop).
-		Width(h.width).
-		Height(h.height).
-		Render(content)
+	return lines
 }
