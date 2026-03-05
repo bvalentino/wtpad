@@ -246,12 +246,19 @@ func (m todosModel) View() string {
 
 	if !hasVisible && !m.inputActive {
 		if m.showCompleted {
-			return hintStyle.Render("No completed todos")
+			return renderEmptyState(m.width, m.height, []string{
+				hintStyle.Render("No completed todos"),
+			})
 		}
 		if len(m.todos) == 0 {
-			return "No todos yet. Press 'a' to add one."
+			return renderEmptyState(m.width, m.height, []string{
+				"Track tasks",
+				hintStyle.Render("Press 'a' to add your first one."),
+			})
 		}
-		return hintStyle.Render("No open todos")
+		return renderEmptyState(m.width, m.height, []string{
+			hintStyle.Render("No open todos"),
+		})
 	}
 
 	var b strings.Builder

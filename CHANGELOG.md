@@ -4,6 +4,12 @@ All notable changes to wtpad will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- Centered empty states for all tabs with description and hint text
+
 ## [0.1.4] - 2026-03-04
 
 ### Added

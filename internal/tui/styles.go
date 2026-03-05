@@ -206,3 +206,10 @@ var (
 	templateSelected = lipgloss.NewStyle().
 				Reverse(true)
 )
+
+// renderEmptyState renders centered lines (vertically and horizontally)
+// within the given width and height.
+func renderEmptyState(width, height int, lines []string) string {
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center,
+		strings.Join(lines, "\n"))
+}

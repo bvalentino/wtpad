@@ -39,7 +39,7 @@ func TestNotesEmptyView(t *testing.T) {
 	m := newNotes(nil, nil)
 	m = m.SetSize(40, 10)
 	view := m.View()
-	if !strings.Contains(view, "No notes") {
+	if !strings.Contains(view, "Write anything") {
 		t.Errorf("empty view should show placeholder, got %q", view)
 	}
 }
