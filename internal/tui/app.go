@@ -138,6 +138,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case aiFileChangedMsg:
 		a.aiPane, _ = a.aiPane.Update(msg)
+		// If the AI tab disappeared while we were on it, switch away.
+		if a.activeTab == tabAI && !a.showAITab() {
+			a = a.switchTab(tabTodos)
+		}
 		// Re-start the watcher since tea.Cmd is one-shot.
 		return a, continueWatching(a.store.Dir())
 	case clearPromptStatusMsg:
@@ -324,6 +328,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.promptsPane, cmd = a.promptsPane.Update(msg)
 	case tabAI:
 		a.aiPane, cmd = a.aiPane.Update(msg)
+		if !a.showAITab() {
+			a = a.switchTab(tabTodos)
+		}
 	}
 	return a, cmd
 }

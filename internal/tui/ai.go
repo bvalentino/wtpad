@@ -89,6 +89,7 @@ func (m aiModel) Update(msg tea.Msg) (aiModel, tea.Cmd) {
 				m.todos = nil
 				m.cursor = 0
 				m.scrollOff = 0
+				m.fileExists = false
 			}
 		}
 		m.confirm = confirmNone
