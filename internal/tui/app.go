@@ -173,7 +173,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case enterHelpMsg:
 		a.helpReturnMode = a.mode
-		a.helpPane = a.helpPane.resize(a.width, a.height)
+		a.helpPane = a.helpPane.open(a.width, a.height)
 		a.mode = modeHelp
 		return a, nil
 	case exitHelpMsg:
@@ -578,7 +578,7 @@ func (a App) renderFooter() string {
 	// Mode-level overrides take precedence over tab-level hints.
 	switch a.mode {
 	case modeHelp:
-		return footerStyle.Render("esc close")
+		return footerStyle.Render(a.helpPane.FooterHint())
 	case modeEditor:
 		return footerStyle.Render(a.editorPane.FooterHint())
 	case modeViewer:
