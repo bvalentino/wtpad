@@ -4,6 +4,16 @@ All notable changes to wtpad will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Help overlay (`?`) now supports scrolling with `↑/↓/j/k/PgUp/PgDn` for small terminals
+
+### Changed
+
+- Centered empty states for all tabs with description and hint text
+
 ## [0.1.4] - 2026-03-04
 
 ### Added
@@ -15,7 +25,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Long titles word-wrap into up to 3 lines inside the box
   - Compact header (short terminals) shows the title right-aligned
   - CLI: `wtpad title <text>`, `wtpad title --clear`, `wtpad title` (show current)
-- Help overlay (`?`) now supports scrolling with `↑/↓/j/k/PgUp/PgDn` for small terminals
 
 ### Fixed
 

@@ -60,7 +60,10 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 
 func (m notesModel) View() string {
 	if len(m.items) == 0 {
-		return "No notes yet. Press 'a' to create one."
+		return renderEmptyState(m.width, m.height, []string{
+			"Write anything",
+			hintStyle.Render("Press 'a' to create your first one."),
+		})
 	}
 
 	var barContent string
