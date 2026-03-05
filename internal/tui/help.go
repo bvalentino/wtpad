@@ -100,7 +100,6 @@ func (h helpModel) buildLines() []string {
 		{"Global", []struct{ key, desc string }{
 			{"Tab", "Switch tab"},
 			{"t", "Set title"},
-			{"p", "Copy AI prompt"},
 			{"?", "Toggle this help"},
 			{"q / Ctrl+C", "Quit"},
 		}},

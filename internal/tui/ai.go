@@ -27,50 +27,25 @@ func clearAIStatusAfter(d time.Duration) tea.Cmd {
 // aiFileChangedMsg signals that ai.md was created, modified, or removed on disk.
 type aiFileChangedMsg struct{}
 
-// aiLLMPrompt is the text copied to the clipboard when the user presses "p".
-const aiLLMPrompt = `# AI Task List — .wtpad/ai.md
-
-Maintain a GFM task list on .wtpad/ai.md in the current working directory.
-This file is displayed in a different terminal as a read-only task list, and as a way to follow what's being done.
-
-## Format
-
-- [ ] Open task
-- [~] In-progress task
-- [x] Completed task
-
-## Workflow
-
-1. Before starting work, add the task to ai.md and mark it in-progress (- [~])
-2. Do the work
-3. Mark it completed (- [x]) when done
-
-Always update ai.md BEFORE starting a task so the user can see what you're working on in real time.
-
-## Conventions
-
-- One task per line, plain text after the checkbox
-- Keep it short — these are displayed in a narrow terminal pane
-- Update statuses as work progresses
-`
-
 type aiModel struct {
-	todos     []model.Todo
-	store     *store.Store
-	cursor    int
-	scrollOff int
-	width     int
-	height    int
-	textWidth int
-	focused   bool
-	statusMsg string
-	confirm   confirmKind
+	todos      []model.Todo
+	store      *store.Store
+	cursor     int
+	scrollOff  int
+	width      int
+	height     int
+	textWidth  int
+	focused    bool
+	statusMsg  string
+	confirm    confirmKind
+	fileExists bool
 }
 
 func newAI(todos []model.Todo, s *store.Store) aiModel {
 	return aiModel{
-		todos: todos,
-		store: s,
+		todos:      todos,
+		store:      s,
+		fileExists: len(todos) > 0 || s.AIExists(),
 	}
 }
 
@@ -142,17 +117,6 @@ func (m aiModel) Update(msg tea.Msg) (aiModel, tea.Cmd) {
 			}
 			return m, clearAIStatusAfter(2 * time.Second)
 		}
-	case "p":
-		if clipboard.Unsupported {
-			m.statusMsg = "Clipboard not available"
-			return m, clearAIStatusAfter(2 * time.Second)
-		}
-		if err := clipboard.WriteAll(aiLLMPrompt); err != nil {
-			m.statusMsg = "Copy failed"
-		} else {
-			m.statusMsg = "Prompt copied!"
-		}
-		return m, clearAIStatusAfter(2 * time.Second)
 	}
 
 	return m, nil
@@ -296,6 +260,7 @@ func (m aiModel) reload() aiModel {
 		return m
 	}
 	m.todos = todos
+	m.fileExists = len(todos) > 0 || m.store.AIExists()
 	m = m.clampCursor()
 	m = m.adjustScroll()
 	return m

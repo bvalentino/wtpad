@@ -111,10 +111,10 @@ func (s *Store) validNoteName(name string) error {
 	return nil
 }
 
-// LoadTodos reads todos.md and parses GFM task list lines.
+// loadTodoFile reads a GFM task list file and returns parsed todos.
 // Returns an empty slice if the file does not exist.
-func (s *Store) LoadTodos() ([]model.Todo, error) {
-	path := filepath.Join(s.basePath, todosFile)
+func (s *Store) loadTodoFile(filename string) ([]model.Todo, error) {
+	path := filepath.Join(s.basePath, filename)
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return []model.Todo{}, nil
@@ -136,6 +136,11 @@ func (s *Store) LoadTodos() ([]model.Todo, error) {
 		return nil, err
 	}
 	return todos, nil
+}
+
+// LoadTodos reads todos.md and parses GFM task list lines.
+func (s *Store) LoadTodos() ([]model.Todo, error) {
+	return s.loadTodoFile(todosFile)
 }
 
 // parseTodoLine parses a single GFM task list line.
@@ -153,12 +158,11 @@ func parseTodoLine(line string) (model.Todo, bool) {
 	}
 }
 
-// SaveTodos writes todos as a GFM task list to todos.md atomically.
-func (s *Store) SaveTodos(todos []model.Todo) error {
+// saveTodoFile writes todos as a GFM task list to the given file atomically.
+func (s *Store) saveTodoFile(filename string, todos []model.Todo) error {
 	if err := s.ensureDir(); err != nil {
 		return err
 	}
-
 	var buf strings.Builder
 	for _, t := range todos {
 		switch t.Status {
@@ -170,35 +174,17 @@ func (s *Store) SaveTodos(todos []model.Todo) error {
 			fmt.Fprintf(&buf, "- [ ] %s\n", t.Text)
 		}
 	}
+	return s.atomicWrite(filename, buf.String())
+}
 
-	return s.atomicWrite(todosFile, buf.String())
+// SaveTodos writes todos as a GFM task list to todos.md atomically.
+func (s *Store) SaveTodos(todos []model.Todo) error {
+	return s.saveTodoFile(todosFile, todos)
 }
 
 // LoadAI reads ai.md and parses GFM task list lines.
-// Returns an empty slice if the file does not exist.
 func (s *Store) LoadAI() ([]model.Todo, error) {
-	path := filepath.Join(s.basePath, aiFile)
-	f, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return []model.Todo{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	var todos []model.Todo
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if todo, ok := parseTodoLine(line); ok {
-			todos = append(todos, todo)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return todos, nil
+	return s.loadTodoFile(aiFile)
 }
 
 // ClearAI removes the ai.md file. Returns nil if the file does not exist.
@@ -216,6 +202,11 @@ func (s *Store) AIExists() bool {
 	path := filepath.Join(s.basePath, aiFile)
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// SaveAI writes AI todos as a GFM task list to ai.md atomically.
+func (s *Store) SaveAI(todos []model.Todo) error {
+	return s.saveTodoFile(aiFile, todos)
 }
 
 // LoadTitle reads the title from title.txt.

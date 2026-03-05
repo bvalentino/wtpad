@@ -257,10 +257,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.titleInput.Focus()
 				a.mode = modeTitleInput
 				return a, textinput.Blink
-			case "p":
-				var cmd tea.Cmd
-				a.aiPane, cmd = a.aiPane.Update(msg)
-				return a, cmd
 			case "q":
 				return a, tea.Quit
 			}
@@ -678,16 +674,14 @@ func (a App) renderFooter() string {
 		return footerStyle.Render(a.titleInput.View())
 	}
 
-	// AI status msg (from global "p" key) shows regardless of active tab.
-	if msg := a.aiPane.StatusMsg(); msg != "" {
-		return footerStyle.Render(msg)
-	}
-
 	var counts, hint string
 
 	switch a.activeTab {
 	case tabAI:
 		counts = pluralize(a.aiPane.count(), "task")
+		if msg := a.aiPane.StatusMsg(); msg != "" {
+			return footerStyle.Render(counts + " · " + msg)
+		}
 		hint = a.aiPane.FooterHint()
 
 	case tabPrompts:
@@ -831,5 +825,5 @@ func (a App) switchTab(tab activeTab) App {
 
 // showAITab reports whether the AI tab should be visible.
 func (a App) showAITab() bool {
-	return a.aiPane.HasItems() || a.store.AIExists()
+	return a.aiPane.HasItems() || a.aiPane.fileExists
 }

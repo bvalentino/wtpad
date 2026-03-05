@@ -579,3 +579,37 @@ func TestAutoExcludeNoGitDir(t *testing.T) {
 		t.Fatalf("SaveTodos should not fail in non-git dir: %v", err)
 	}
 }
+
+func TestSaveAIRoundTrip(t *testing.T) {
+	s := tempStore(t)
+	want := []model.Todo{
+		{Text: "Open task"},
+		{Text: "Working on it", Status: model.StatusInProgress},
+		{Text: "Finished", Status: model.StatusDone},
+	}
+	if err := s.SaveAI(want); err != nil {
+		t.Fatalf("SaveAI: %v", err)
+	}
+	got, err := s.LoadAI()
+	if err != nil {
+		t.Fatalf("LoadAI: %v", err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d todos, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("todo[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSaveAICreatesDir(t *testing.T) {
+	s := tempStore(t)
+	if err := s.SaveAI([]model.Todo{{Text: "test"}}); err != nil {
+		t.Fatalf("SaveAI: %v", err)
+	}
+	if _, err := os.Stat(s.Dir()); err != nil {
+		t.Errorf("expected .wtpad/ to exist after SaveAI: %v", err)
+	}
+}

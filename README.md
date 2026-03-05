@@ -44,6 +44,7 @@ wtpad add <text>       # add a todo
 wtpad ls               # list todos
 wtpad done <n>         # mark todo #n done
 wtpad note <text>      # append a note
+wtpad ai <command>     # AI task tracking (see below)
 ```
 
 ## Keybindings
@@ -59,6 +60,34 @@ wtpad note <text>      # append a note
 | `x` | Delete selected |
 | `?` | Help |
 | `q` | Quit |
+
+## AI Integration
+
+wtpad can display an AI-managed task list in a dedicated tab, updated in real time via file watching. LLM coding tools (like Claude Code) use the `wtpad ai` CLI to track their work — visible in the TUI as it happens.
+
+### Commands
+
+```bash
+wtpad ai start <text>            # add an in-progress task
+wtpad ai done <text>             # mark a task as done
+wtpad ai add <text>              # add a task for later
+wtpad ai ls                      # list current tasks
+wtpad ai clear                   # remove all tasks
+wtpad ai install claude-code     # set up Claude Code integration
+```
+
+### Claude Code Setup
+
+```bash
+wtpad ai install claude-code
+```
+
+This writes to:
+
+- `.claude/local.md` — instructions telling Claude to use `wtpad ai` commands
+- `.claude/settings.local.json` — a `SessionStart` hook that loads current tasks into context
+
+Once installed, Claude Code will automatically track its work in the AI tab.
 
 ## Data
 
