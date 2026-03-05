@@ -124,17 +124,11 @@ func (ts *TemplateStore) SaveTemplate(name string, todos []model.Todo) (string, 
 
 	var buf strings.Builder
 	for _, t := range todos {
-		switch t.Status {
-		case model.StatusDone:
-			fmt.Fprintf(&buf, "- [x] %s\n", t.Text)
-		case model.StatusInProgress:
-			fmt.Fprintf(&buf, "- [~] %s\n", t.Text)
-		default:
-			fmt.Fprintf(&buf, "- [ ] %s\n", t.Text)
-		}
+		buf.WriteString(t.GFMLine())
+		buf.WriteByte('\n')
 	}
 
-	if err := atomicWriteFile(filepath.Join(ts.basePath, name+".md"), []byte(buf.String()), 0o600); err != nil {
+	if err := AtomicWriteFile(filepath.Join(ts.basePath, name+".md"), []byte(buf.String()), 0o600); err != nil {
 		return "", err
 	}
 	return name, nil

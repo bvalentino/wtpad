@@ -165,14 +165,8 @@ func (s *Store) saveTodoFile(filename string, todos []model.Todo) error {
 	}
 	var buf strings.Builder
 	for _, t := range todos {
-		switch t.Status {
-		case model.StatusDone:
-			fmt.Fprintf(&buf, "- [x] %s\n", t.Text)
-		case model.StatusInProgress:
-			fmt.Fprintf(&buf, "- [~] %s\n", t.Text)
-		default:
-			fmt.Fprintf(&buf, "- [ ] %s\n", t.Text)
-		}
+		buf.WriteString(t.GFMLine())
+		buf.WriteByte('\n')
 	}
 	return s.atomicWrite(filename, buf.String())
 }
@@ -337,11 +331,11 @@ func (s *Store) DeleteNote(name string) error {
 
 // atomicWrite writes data to a .tmp file then renames it into place.
 func (s *Store) atomicWrite(filename, data string) error {
-	return atomicWriteFile(filepath.Join(s.basePath, filename), []byte(data), 0o600)
+	return AtomicWriteFile(filepath.Join(s.basePath, filename), []byte(data), 0o600)
 }
 
-// atomicWriteFile writes data to path via a temporary file and atomic rename.
-func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+// AtomicWriteFile writes data to path via a temporary file and atomic rename.
+func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {

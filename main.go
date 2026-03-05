@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,6 +18,11 @@ import (
 	"github.com/bvalentino/wtpad/internal/tui"
 )
 
+func fatal(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	os.Exit(1)
+}
+
 func main() {
 	args := os.Args[1:]
 
@@ -28,8 +35,7 @@ func main() {
 
 	s, err := store.New(".")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	// No args → TUI
@@ -61,20 +67,17 @@ func main() {
 func cmdAdd(s *store.Store, args []string) {
 	text := strings.Join(args, " ")
 	if text == "" {
-		fmt.Fprintln(os.Stderr, "Usage: wtpad add <text>")
-		os.Exit(1)
+		fatal("Usage: wtpad add <text>")
 	}
 
 	todos, err := s.LoadTodos()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	todos = append(todos, model.Todo{Text: text})
 	if err := s.SaveTodos(todos); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	fmt.Printf("Added: %s\n", text)
@@ -83,8 +86,7 @@ func cmdAdd(s *store.Store, args []string) {
 func cmdLs(s *store.Store) {
 	todos, err := s.LoadTodos()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	if len(todos) == 0 {
@@ -114,14 +116,12 @@ func cmdLs(s *store.Store) {
 func cmdNote(s *store.Store, args []string) {
 	body := strings.Join(args, " ")
 	if body == "" {
-		fmt.Fprintln(os.Stderr, "Usage: wtpad note <text>")
-		os.Exit(1)
+		fatal("Usage: wtpad note <text>")
 	}
 
 	name, err := s.SaveNote("", body)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	fmt.Printf("Saved note: %s.md\n", name)
@@ -129,20 +129,17 @@ func cmdNote(s *store.Store, args []string) {
 
 func cmdDone(s *store.Store, args []string) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "Usage: wtpad done <n>")
-		os.Exit(1)
+		fatal("Usage: wtpad done <n>")
 	}
 
 	n, err := strconv.Atoi(args[0])
 	if err != nil || n < 1 {
-		fmt.Fprintf(os.Stderr, "Error: %q is not a valid todo number\n", args[0])
-		os.Exit(1)
+		fatal("Error: %q is not a valid todo number", args[0])
 	}
 
 	todos, err := s.LoadTodos()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	// Find the Nth open todo (same order as ls)
@@ -159,14 +156,12 @@ func cmdDone(s *store.Store, args []string) {
 	}
 
 	if found == -1 {
-		fmt.Fprintf(os.Stderr, "Error: no open todo #%d (have %d open)\n", n, openCount)
-		os.Exit(1)
+		fatal("Error: no open todo #%d (have %d open)", n, openCount)
 	}
 
 	todos[found].Status = model.StatusDone
 	if err := s.SaveTodos(todos); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	fmt.Printf("Done: %s\n", todos[found].Text)
@@ -176,8 +171,7 @@ func cmdTitle(s *store.Store, args []string) {
 	if len(args) == 0 {
 		title, err := s.LoadTitle()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			fatal("Error: %v", err)
 		}
 		if title == "" {
 			fmt.Println("No title set.")
@@ -189,8 +183,7 @@ func cmdTitle(s *store.Store, args []string) {
 
 	if args[0] == "--clear" {
 		if err := s.SaveTitle(""); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			fatal("Error: %v", err)
 		}
 		fmt.Println("Title cleared.")
 		return
@@ -198,12 +191,10 @@ func cmdTitle(s *store.Store, args []string) {
 
 	title := strings.Join(args, " ")
 	if runes := []rune(title); len(runes) > 40 {
-		fmt.Fprintf(os.Stderr, "Error: title too long (max 40 characters)\n")
-		os.Exit(1)
+		fatal("Error: title too long (max 40 characters)")
 	}
 	if err := s.SaveTitle(title); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 	fmt.Printf("Title set: %s\n", title)
 }
@@ -211,28 +202,24 @@ func cmdTitle(s *store.Store, args []string) {
 func runTUI(s *store.Store) {
 	todos, err := s.LoadTodos()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	notes, err := s.ListNotes()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 	ts := store.NewTemplateStore(filepath.Join(home, ".wtpad", "templates"))
 	ps := store.NewPromptStore(filepath.Join(home, ".wtpad", "prompts"))
 
 	prompts, err := ps.ListPrompts()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	aiTodos, err := s.LoadAI()
@@ -243,8 +230,7 @@ func runTUI(s *store.Store) {
 	branch := gitutil.DetectBranch(".")
 	title, err := s.LoadTitle()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 
 	app := tui.New(tui.AppConfig{
@@ -259,8 +245,7 @@ func runTUI(s *store.Store) {
 		Title:         title,
 	})
 	if _, err := tea.NewProgram(app, tea.WithAltScreen()).Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 }
 
@@ -303,18 +288,15 @@ func cmdAIStart(s *store.Store, args []string) {
 func aiAppendTask(s *store.Store, args []string, status model.TodoStatus, cmd, verb string) {
 	text := strings.Join(args, " ")
 	if text == "" {
-		fmt.Fprintf(os.Stderr, "Usage: wtpad ai %s <text>\n", cmd)
-		os.Exit(1)
+		fatal("Usage: wtpad ai %s <text>", cmd)
 	}
 	todos, err := s.LoadAI()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 	todos = append(todos, model.Todo{Text: text, Status: status})
 	if err := s.SaveAI(todos); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 	fmt.Printf("%s: %s\n", verb, text)
 }
@@ -322,13 +304,11 @@ func aiAppendTask(s *store.Store, args []string, status model.TodoStatus, cmd, v
 func cmdAIDone(s *store.Store, args []string) {
 	text := strings.Join(args, " ")
 	if text == "" {
-		fmt.Fprintln(os.Stderr, "Usage: wtpad ai done <text>")
-		os.Exit(1)
+		fatal("Usage: wtpad ai done <text>")
 	}
 	todos, err := s.LoadAI()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 	found := false
 	for i, t := range todos {
@@ -339,12 +319,10 @@ func cmdAIDone(s *store.Store, args []string) {
 		}
 	}
 	if !found {
-		fmt.Fprintf(os.Stderr, "No matching open or in-progress task: %s\n", text)
-		os.Exit(1)
+		fatal("No matching open or in-progress task: %s", text)
 	}
 	if err := s.SaveAI(todos); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 	fmt.Printf("Done: %s\n", text)
 }
@@ -352,45 +330,33 @@ func cmdAIDone(s *store.Store, args []string) {
 func cmdAILs(s *store.Store) {
 	todos, err := s.LoadAI()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 	if len(todos) == 0 {
 		fmt.Println("No AI tasks.")
 		return
 	}
 	for _, t := range todos {
-		switch t.Status {
-		case model.StatusDone:
-			fmt.Printf("- [x] %s\n", t.Text)
-		case model.StatusInProgress:
-			fmt.Printf("- [~] %s\n", t.Text)
-		default:
-			fmt.Printf("- [ ] %s\n", t.Text)
-		}
+		fmt.Println(t.GFMLine())
 	}
 }
 
 func cmdAIClear(s *store.Store) {
 	if err := s.ClearAI(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatal("Error: %v", err)
 	}
 	fmt.Println("AI tasks cleared.")
 }
 
 func cmdAIInstall(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "Usage: wtpad ai install claude-code")
-		os.Exit(1)
+		fatal("Usage: wtpad ai install claude-code")
 	}
 	switch args[0] {
 	case "claude-code":
 		installClaudeCode()
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown integration: %s\n\n", args[0])
-		fmt.Fprintln(os.Stderr, "Supported integrations: claude-code")
-		os.Exit(1)
+		fatal("Unknown integration: %s\n\nSupported integrations: claude-code", args[0])
 	}
 }
 
@@ -410,38 +376,44 @@ Keep descriptions short — they display in a narrow terminal pane.
 `
 
 func installClaudeCode() {
-	if err := os.MkdirAll(".claude", 0o755); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating .claude/: %v\n", err)
-		os.Exit(1)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fatal("Error finding home directory: %v", err)
+	}
+	claudeDir := filepath.Join(home, ".claude")
+
+	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
+		fatal("Error creating ~/.claude/: %v", err)
 	}
 
-	if err := writeLocalMD(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing .claude/local.md: %v\n", err)
-		os.Exit(1)
+	if err := writeLocalMD(claudeDir); err != nil {
+		fatal("Error writing ~/.claude/CLAUDE.md: %v", err)
 	}
 
-	if err := mergeSettingsHook(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing .claude/settings.local.json: %v\n", err)
-		os.Exit(1)
+	if err := mergeSettingsHook(claudeDir); err != nil {
+		fatal("Error writing ~/.claude/settings.json: %v", err)
 	}
 
 	fmt.Println("Claude Code integration installed:")
-	fmt.Println("  .claude/local.md             — AI task tracking instructions")
-	fmt.Println("  .claude/settings.local.json  — SessionStart hook")
+	fmt.Println("  ~/.claude/CLAUDE.md      — AI task tracking instructions")
+	fmt.Println("  ~/.claude/settings.json  — SessionStart hook")
 }
 
-func writeLocalMD() error {
-	path := filepath.Join(".claude", "local.md")
-	existing, err := os.ReadFile(path)
-	if err == nil && strings.Contains(string(existing), localMDMarker) {
-		return nil
-	}
-
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+func writeLocalMD(claudeDir string) error {
+	path := filepath.Join(claudeDir, "CLAUDE.md")
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+
+	existing, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	if strings.Contains(string(existing), localMDMarker) {
+		return nil
+	}
 
 	prefix := ""
 	if len(existing) > 0 && existing[len(existing)-1] != '\n' {
@@ -454,9 +426,9 @@ func writeLocalMD() error {
 	return err
 }
 
-func mergeSettingsHook() error {
-	path := filepath.Join(".claude", "settings.local.json")
-	hookCmd := "wtpad ai ls 2>/dev/null || true"
+func mergeSettingsHook(claudeDir string) error {
+	path := filepath.Join(claudeDir, "settings.json")
+	hookCmd := `command -v wtpad >/dev/null 2>&1 && wtpad ai ls 2>/dev/null || { echo "wtpad: command not found — remove the <!-- wtpad:ai --> section from ~/.claude/CLAUDE.md and this hook from ~/.claude/settings.json to clean up"; true; }`
 
 	var settings map[string]any
 	data, err := os.ReadFile(path)
@@ -489,26 +461,69 @@ func mergeSettingsHook() error {
 		return fmt.Errorf("%s: \"hooks.SessionStart\" has unexpected type %T", path, v)
 	}
 
-	for _, h := range sessionStart {
-		if hm, ok := h.(map[string]any); ok {
-			if cmd, ok := hm["command"].(string); ok && cmd == hookCmd {
-				return nil
+	// Look for an existing wtpad hook in both old (flat) and new (nested) formats.
+	found := false
+	for i, entry := range sessionStart {
+		em, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		// Old flat format: {"type":"command","command":"wtpad ai ls ..."}
+		if cmd, ok := em["command"].(string); ok && strings.Contains(cmd, "wtpad ai ls") {
+			// Replace the flat entry with the new nested format
+			sessionStart[i] = map[string]any{
+				"hooks": []any{
+					map[string]any{
+						"type":    "command",
+						"command": hookCmd,
+					},
+				},
 			}
+			found = true
+			break
+		}
+
+		// New nested format: {"hooks":[{"type":"command","command":"wtpad ai ls ..."}]}
+		hooksArr, _ := em["hooks"].([]any)
+		for _, h := range hooksArr {
+			if hm, ok := h.(map[string]any); ok {
+				if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "wtpad ai ls") {
+					if cmd == hookCmd {
+						return nil // already up to date
+					}
+					hm["command"] = hookCmd
+					found = true
+					break
+				}
+			}
+		}
+		if found {
+			break
 		}
 	}
 
-	sessionStart = append(sessionStart, map[string]any{
-		"type":    "command",
-		"command": hookCmd,
-	})
-	hooks["SessionStart"] = sessionStart
-	settings["hooks"] = hooks
+	if !found {
+		sessionStart = append(sessionStart, map[string]any{
+			"hooks": []any{
+				map[string]any{
+					"type":    "command",
+					"command": hookCmd,
+				},
+			},
+		})
+		hooks["SessionStart"] = sessionStart
+		settings["hooks"] = hooks
+	}
 
-	out, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(settings); err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(out, '\n'), 0o644)
+	return store.AtomicWriteFile(path, buf.Bytes(), 0o644)
 }
 
 func printAIUsage() {
