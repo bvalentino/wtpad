@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -268,6 +267,8 @@ func cmdAI(s *store.Store, args []string) {
 		cmdAILs(s)
 	case "clear":
 		cmdAIClear(s)
+	case "prompt":
+		cmdAIPrompt(s)
 	case "install":
 		cmdAIInstall(args[1:])
 	default:
@@ -348,6 +349,29 @@ func cmdAIClear(s *store.Store) {
 	fmt.Println("AI tasks cleared.")
 }
 
+const promptText = `## wtpad AI Task Tracking
+
+Track your work using ` + "`wtpad ai`" + ` commands so progress is visible in the wtpad TUI:
+
+- Before starting work: ` + "`wtpad ai start \"task description\"`" + `
+- After completing work: ` + "`wtpad ai done \"task description\"`" + `
+- To add a task for later: ` + "`wtpad ai add \"task description\"`" + `
+
+Always start a task before doing the work so the user can see what you're working on in real time.
+Keep descriptions short — they display in a narrow terminal pane.`
+
+func cmdAIPrompt(s *store.Store) {
+	fmt.Println(promptText)
+	todos, err := s.LoadAI()
+	if err != nil || len(todos) == 0 {
+		return
+	}
+	fmt.Println("\nCurrent AI tasks:")
+	for _, t := range todos {
+		fmt.Println(t.GFMLine())
+	}
+}
+
 func cmdAIInstall(args []string) {
 	if len(args) == 0 {
 		fatal("Usage: wtpad ai install claude-code")
@@ -360,21 +384,6 @@ func cmdAIInstall(args []string) {
 	}
 }
 
-const localMDMarker = "<!-- wtpad:ai -->"
-
-const localMDContent = localMDMarker + `
-## wtpad AI Task Tracking
-
-Track your work using ` + "`wtpad ai`" + ` commands so progress is visible in the wtpad TUI:
-
-- Before starting work: ` + "`wtpad ai start \"task description\"`" + `
-- After completing work: ` + "`wtpad ai done \"task description\"`" + `
-- To add a task for later: ` + "`wtpad ai add \"task description\"`" + `
-
-Always start a task before doing the work so the user can see what you're working on in real time.
-Keep descriptions short — they display in a narrow terminal pane.
-`
-
 func installClaudeCode() {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -386,49 +395,17 @@ func installClaudeCode() {
 		fatal("Error creating ~/.claude/: %v", err)
 	}
 
-	if err := writeLocalMD(claudeDir); err != nil {
-		fatal("Error writing ~/.claude/CLAUDE.md: %v", err)
-	}
-
 	if err := mergeSettingsHook(claudeDir); err != nil {
 		fatal("Error writing ~/.claude/settings.json: %v", err)
 	}
 
 	fmt.Println("Claude Code integration installed:")
-	fmt.Println("  ~/.claude/CLAUDE.md      — AI task tracking instructions")
-	fmt.Println("  ~/.claude/settings.json  — SessionStart hook")
-}
-
-func writeLocalMD(claudeDir string) error {
-	path := filepath.Join(claudeDir, "CLAUDE.md")
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	existing, err := io.ReadAll(f)
-	if err != nil {
-		return err
-	}
-	if strings.Contains(string(existing), localMDMarker) {
-		return nil
-	}
-
-	prefix := ""
-	if len(existing) > 0 && existing[len(existing)-1] != '\n' {
-		prefix = "\n"
-	}
-	if len(existing) > 0 {
-		prefix += "\n"
-	}
-	_, err = f.WriteString(prefix + localMDContent)
-	return err
+	fmt.Println("  ~/.claude/settings.json  — SessionStart hook (wtpad ai prompt)")
 }
 
 func mergeSettingsHook(claudeDir string) error {
 	path := filepath.Join(claudeDir, "settings.json")
-	hookCmd := `command -v wtpad >/dev/null 2>&1 && wtpad ai ls 2>/dev/null || { echo "wtpad: command not found — remove the <!-- wtpad:ai --> section from ~/.claude/CLAUDE.md and this hook from ~/.claude/settings.json to clean up"; true; }`
+	hookCmd := `command -v wtpad >/dev/null 2>&1 && wtpad ai prompt 2>/dev/null || { echo "wtpad: command not found — remove this hook from ~/.claude/settings.json to clean up"; true; }`
 
 	var settings map[string]any
 	data, err := os.ReadFile(path)
@@ -470,7 +447,7 @@ func mergeSettingsHook(claudeDir string) error {
 		}
 
 		// Old flat format: {"type":"command","command":"wtpad ai ls ..."}
-		if cmd, ok := em["command"].(string); ok && strings.Contains(cmd, "wtpad ai ls") {
+		if cmd, ok := em["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
 			// Replace the flat entry with the new nested format
 			sessionStart[i] = map[string]any{
 				"hooks": []any{
@@ -488,7 +465,7 @@ func mergeSettingsHook(claudeDir string) error {
 		hooksArr, _ := em["hooks"].([]any)
 		for _, h := range hooksArr {
 			if hm, ok := h.(map[string]any); ok {
-				if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "wtpad ai ls") {
+				if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
 					if cmd == hookCmd {
 						return nil // already up to date
 					}
@@ -535,6 +512,7 @@ Commands:
   done <text>             Mark a task as done
   ls                      List AI tasks
   clear                   Remove all AI tasks
+  prompt                  Print AI instructions and current tasks
   install claude-code     Set up Claude Code integration`)
 }
 

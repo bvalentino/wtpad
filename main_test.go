@@ -8,78 +8,6 @@ import (
 	"testing"
 )
 
-// --- writeLocalMD tests ---
-
-func TestWriteLocalMD_NewFile(t *testing.T) {
-	dir := t.TempDir()
-	if err := writeLocalMD(dir); err != nil {
-		t.Fatalf("writeLocalMD: %v", err)
-	}
-	data, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-	if !strings.Contains(string(data), localMDMarker) {
-		t.Error("expected marker in CLAUDE.md")
-	}
-	if !strings.Contains(string(data), "wtpad ai start") {
-		t.Error("expected instructions in CLAUDE.md")
-	}
-}
-
-func TestWriteLocalMD_Idempotent(t *testing.T) {
-	dir := t.TempDir()
-	if err := writeLocalMD(dir); err != nil {
-		t.Fatalf("first call: %v", err)
-	}
-	first, _ := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
-
-	if err := writeLocalMD(dir); err != nil {
-		t.Fatalf("second call: %v", err)
-	}
-	second, _ := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
-
-	if string(first) != string(second) {
-		t.Error("writeLocalMD is not idempotent — content changed on second call")
-	}
-}
-
-func TestWriteLocalMD_AppendsToExisting(t *testing.T) {
-	dir := t.TempDir()
-	existing := "# My Config\n\nSome existing content.\n"
-	os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(existing), 0o644)
-
-	if err := writeLocalMD(dir); err != nil {
-		t.Fatalf("writeLocalMD: %v", err)
-	}
-	data, _ := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
-	content := string(data)
-
-	if !strings.HasPrefix(content, existing) {
-		t.Error("existing content was not preserved")
-	}
-	if !strings.Contains(content, localMDMarker) {
-		t.Error("marker was not appended")
-	}
-}
-
-func TestWriteLocalMD_AppendsNewlineIfMissing(t *testing.T) {
-	dir := t.TempDir()
-	existing := "no trailing newline"
-	os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(existing), 0o644)
-
-	if err := writeLocalMD(dir); err != nil {
-		t.Fatalf("writeLocalMD: %v", err)
-	}
-	data, _ := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
-	content := string(data)
-
-	// Should have added a newline before the marker section
-	if !strings.Contains(content, "no trailing newline\n\n"+localMDMarker) {
-		t.Errorf("expected double newline separator, got:\n%s", content)
-	}
-}
-
 // --- mergeSettingsHook tests ---
 
 func TestMergeSettingsHook_FreshInstall(t *testing.T) {
@@ -99,8 +27,8 @@ func TestMergeSettingsHook_FreshInstall(t *testing.T) {
 	}
 
 	cmd := extractHookCommand(t, settings)
-	if !strings.Contains(cmd, "command -v wtpad") {
-		t.Errorf("hook command missing wtpad check: %s", cmd)
+	if !strings.Contains(cmd, "wtpad ai prompt") {
+		t.Errorf("hook command missing 'wtpad ai prompt': %s", cmd)
 	}
 }
 
@@ -163,7 +91,7 @@ func TestMergeSettingsHook_MigratesOldFlatFormat(t *testing.T) {
 	json.Unmarshal(data, &settings)
 
 	cmd := extractHookCommand(t, settings)
-	if !strings.Contains(cmd, "command -v wtpad") {
+	if !strings.Contains(cmd, "wtpad ai prompt") {
 		t.Errorf("old hook was not migrated, got: %s", cmd)
 	}
 
@@ -251,9 +179,6 @@ func TestMergeSettingsHook_NoHTMLEscaping(t *testing.T) {
 
 	if strings.Contains(content, `\u003c`) || strings.Contains(content, `\u0026`) {
 		t.Error("settings.json contains HTML-escaped characters")
-	}
-	if !strings.Contains(content, "<!--") {
-		t.Error("expected unescaped <!-- in hook command")
 	}
 }
 
