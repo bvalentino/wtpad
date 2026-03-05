@@ -138,9 +138,7 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("62"))
 
-	// Help overlay styles (same as overlay title)
-	helpTitle = overlayTitle
-
+	// Help overlay styles
 	helpSection = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("62"))

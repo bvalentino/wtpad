@@ -211,8 +211,8 @@ func TestResizeInHelpMode(t *testing.T) {
 
 	// View must not panic and should contain help content
 	out := app.View()
-	if !strings.Contains(out, "keyboard shortcuts") {
-		t.Error("help view should contain 'keyboard shortcuts' after resize")
+	if !strings.Contains(out, "Keyboard Shortcuts") {
+		t.Error("help view should contain 'Keyboard Shortcuts' after resize")
 	}
 }
 
