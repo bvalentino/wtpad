@@ -39,8 +39,7 @@ const (
 	tabStripHeight    = 3
 	footerHeight      = 1
 	sideBorderSize    = 2  // left + right │ borders
-	maxTitleLen       = 40
-	maxTitleLineWidth = 26 // max chars per line inside the title box
+	maxTitleLineWidth = 35 // max chars per line inside the title box
 )
 
 // ASCII art header, 6 lines.
@@ -107,11 +106,7 @@ func New(cfg AppConfig) App {
 	pp := newPrompts(cfg.Prompts, cfg.PromptStore)
 	ti := textinput.New()
 	ti.Prompt = "Title: "
-	ti.CharLimit = maxTitleLen
 	title := cfg.Title
-	if runes := []rune(title); len(runes) > maxTitleLen {
-		title = string(runes[:maxTitleLen])
-	}
 	wch := startDirWatcher(cfg.Store)
 	return App{
 		store:        cfg.Store,
@@ -157,9 +152,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if title, err := a.store.LoadTitle(); err != nil {
 			log.Printf("wtpad: failed to reload title: %v", err)
 		} else {
-			if runes := []rune(title); len(runes) > maxTitleLen {
-				title = string(runes[:maxTitleLen])
-			}
 			if title != a.title {
 				a.title = title
 				cmds = append(cmds, tea.SetWindowTitle(a.windowTitle()))
@@ -419,7 +411,15 @@ func (a App) renderHeader() string {
 		if a.title != "" && a.width > 4 {
 			titleLines := wrapTitle(a.title, maxTitleLineWidth)
 			if len(titleLines) > 3 {
-				titleLines = titleLines[:3]
+				last := titleLines[2]
+				if lipgloss.Width(last)+1 <= maxTitleLineWidth {
+					last += "…"
+				} else {
+					// Replace last character with ellipsis
+					runes := []rune(last)
+					last = string(runes[:len(runes)-1]) + "…"
+				}
+				titleLines = append(titleLines[:2], last)
 			}
 			numContent := len(titleLines)
 
