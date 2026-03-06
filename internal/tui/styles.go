@@ -112,7 +112,12 @@ var (
 			Reverse(true)
 
 	todoDone = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240"))
+			Foreground(lipgloss.Color("240")).
+			Strikethrough(true)
+
+	// todoDoneNoStrike is used in the AI tab where strikethrough clutters
+	// the read-only task list (items stay visible as a log of completed work).
+	todoDoneNoStrike = todoDone.Strikethrough(false)
 
 	todoInProgress = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("214"))

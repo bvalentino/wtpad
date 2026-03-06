@@ -55,6 +55,7 @@ const asciiHeaderHeight = 6
 
 type App struct {
 	store     *store.Store
+	aiEvents  <-chan aiFileChangedMsg // long-lived watcher channel; nil if watcher failed
 	width     int
 	height    int
 	activeTab activeTab
@@ -112,6 +113,7 @@ func New(cfg AppConfig) App {
 	}
 	return App{
 		store:        cfg.Store,
+		aiEvents:     startAIWatcher(cfg.Store),
 		promptStore:  cfg.PromptStore,
 		activeTab:    tabTodos,
 		mode:         modeNormal,
@@ -128,7 +130,7 @@ func New(cfg AppConfig) App {
 }
 
 func (a App) Init() tea.Cmd {
-	return watchAIFile(a.store.Dir())
+	return waitForAIChange(a.aiEvents)
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -138,12 +140,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case aiFileChangedMsg:
 		a.aiPane, _ = a.aiPane.Update(msg)
-		// If the AI tab disappeared while we were on it, switch away.
 		if a.activeTab == tabAI && !a.showAITab() {
 			a = a.switchTab(tabTodos)
 		}
-		// Re-start the watcher since tea.Cmd is one-shot.
-		return a, continueWatching(a.store.Dir())
+		// Re-subscribe for the next event from the long-lived watcher.
+		return a, waitForAIChange(a.aiEvents)
 	case clearPromptStatusMsg:
 		a.promptsPane, _ = a.promptsPane.Update(msg)
 		return a, nil

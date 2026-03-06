@@ -74,6 +74,7 @@ wtpad ai add <text>              # add a task for later
 wtpad ai ls                      # list current tasks
 wtpad ai clear                   # remove all tasks
 wtpad ai install claude-code     # set up Claude Code integration
+wtpad ai uninstall claude-code   # remove Claude Code integration
 ```
 
 ### Claude Code Setup
@@ -82,10 +83,7 @@ wtpad ai install claude-code     # set up Claude Code integration
 wtpad ai install claude-code
 ```
 
-This writes to:
-
-- `.claude/local.md` — instructions telling Claude to use `wtpad ai` commands
-- `.claude/settings.local.json` — a `SessionStart` hook that loads current tasks into context
+This adds a `SessionStart` hook to `~/.claude/settings.json` that runs `wtpad ai prompt` at the start of each session, injecting task-tracking instructions and the current task list into context.
 
 Once installed, Claude Code will automatically track its work in the AI tab.
 

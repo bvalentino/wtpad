@@ -38,9 +38,9 @@ func (s *Store) Dir() string {
 	return s.basePath
 }
 
-// ensureDir creates the .wtpad/ directory if it doesn't exist.
+// EnsureDir creates the .wtpad/ directory if it doesn't exist.
 // On first creation, it adds .wtpad/ to .git/info/exclude.
-func (s *Store) ensureDir() error {
+func (s *Store) EnsureDir() error {
 	_, statErr := os.Stat(s.basePath)
 	created := os.IsNotExist(statErr)
 
@@ -160,7 +160,7 @@ func parseTodoLine(line string) (model.Todo, bool) {
 
 // saveTodoFile writes todos as a GFM task list to the given file atomically.
 func (s *Store) saveTodoFile(filename string, todos []model.Todo) error {
-	if err := s.ensureDir(); err != nil {
+	if err := s.EnsureDir(); err != nil {
 		return err
 	}
 	var buf strings.Builder
@@ -227,7 +227,7 @@ func (s *Store) SaveTitle(title string) error {
 		}
 		return err
 	}
-	if err := s.ensureDir(); err != nil {
+	if err := s.EnsureDir(); err != nil {
 		return err
 	}
 	return s.atomicWrite(titleFile, title)
@@ -289,7 +289,7 @@ func (s *Store) LoadNote(name string) (*model.Note, error) {
 // SaveNote writes a note atomically. If name is empty, generates a timestamp name.
 // Returns the name used.
 func (s *Store) SaveNote(name string, body string) (string, error) {
-	if err := s.ensureDir(); err != nil {
+	if err := s.EnsureDir(); err != nil {
 		return "", err
 	}
 
