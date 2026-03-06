@@ -269,6 +269,8 @@ func cmdAI(s *store.Store, args []string) {
 		cmdAIClear(s)
 	case "prompt":
 		cmdAIPrompt(s)
+	case "title":
+		cmdAITitle(s, args[1:])
 	case "install":
 		cmdAIInstall(args[1:])
 	default:
@@ -349,14 +351,38 @@ func cmdAIClear(s *store.Store) {
 	fmt.Println("AI tasks cleared.")
 }
 
+func cmdAITitle(s *store.Store, args []string) {
+	text := strings.Join(args, " ")
+	if text == "" {
+		fatal("Usage: wtpad ai title <text>")
+	}
+	existing, err := s.LoadTitle()
+	if err != nil {
+		fatal("Error: %v", err)
+	}
+	if existing != "" {
+		fmt.Printf("Title already set: %s\n", existing)
+		return
+	}
+	if runes := []rune(text); len(runes) > 40 {
+		fatal("Error: title too long (max 40 characters)")
+	}
+	if err := s.SaveTitle(text); err != nil {
+		fatal("Error: %v", err)
+	}
+	fmt.Printf("Title set: %s\n", text)
+}
+
 const promptText = `You MUST use wtpad to track your work so the user can see progress in real time.
 
 Run these commands via the Bash tool:
 - Before starting work: wtpad ai start "short task description"
 - After completing work: wtpad ai done "short task description"
 - To queue a task for later: wtpad ai add "short task description"
+- When it's clear what the session is about: wtpad ai title "short title"
 
-Keep descriptions short — they display in a narrow terminal pane.`
+The title is only set if the user hasn't already set one. Max 40 characters.
+Keep all descriptions short — they display in a narrow terminal pane.`
 
 func cmdAIPrompt(s *store.Store) {
 	fmt.Println(promptText)
@@ -510,6 +536,7 @@ Commands:
   done <text>             Mark a task as done
   ls                      List AI tasks
   clear                   Remove all AI tasks
+  title <text>            Set title (no-op if already set)
   prompt                  Print AI instructions and current tasks
   install claude-code     Set up Claude Code integration`)
 }
