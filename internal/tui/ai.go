@@ -2,14 +2,12 @@ package tui
 
 import (
 	"log"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fsnotify/fsnotify"
 
 	"github.com/bvalentino/wtpad/internal/model"
 	"github.com/bvalentino/wtpad/internal/store"
@@ -23,9 +21,6 @@ func clearAIStatusAfter(d time.Duration) tea.Cmd {
 		return clearAIStatusMsg{}
 	})
 }
-
-// aiFileChangedMsg signals that ai.md was created, modified, or removed on disk.
-type aiFileChangedMsg struct{}
 
 type aiModel struct {
 	todos      []model.Todo
@@ -375,74 +370,4 @@ func (m aiModel) StatusMsg() string {
 // HasItems reports whether the AI pane has any todos loaded.
 func (m aiModel) HasItems() bool {
 	return len(m.todos) > 0
-}
-
-// isAIFileEvent reports whether a fsnotify event is a create/write/remove/rename
-// of ai.md.
-func isAIFileEvent(event fsnotify.Event) bool {
-	return filepath.Base(event.Name) == "ai.md" &&
-		event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0
-}
-
-// startAIWatcher creates a long-lived fsnotify watcher on the store's directory
-// and returns a channel that emits aiFileChangedMsg for each ai.md change.
-// The watcher goroutine runs until the channel is closed (on process exit).
-// Returns nil if the watcher cannot be started.
-func startAIWatcher(s *store.Store) <-chan aiFileChangedMsg {
-	// Ensure the directory exists so the watcher has something to watch.
-	// Uses EnsureDir (not raw os.MkdirAll) so .wtpad/ is added to .git/info/exclude.
-	if err := s.EnsureDir(); err != nil {
-		log.Printf("wtpad: cannot create %s for watcher: %v", s.Dir(), err)
-		return nil
-	}
-	dir := s.Dir()
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Printf("wtpad: fsnotify watcher failed to start: %v", err)
-		return nil
-	}
-
-	if err := watcher.Add(dir); err != nil {
-		watcher.Close()
-		log.Printf("wtpad: fsnotify cannot watch %s: %v", dir, err)
-		return nil
-	}
-
-	ch := make(chan aiFileChangedMsg, 1)
-	go func() {
-		defer watcher.Close()
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if isAIFileEvent(event) {
-					ch <- aiFileChangedMsg{}
-				}
-			case _, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-			}
-		}
-	}()
-	return ch
-}
-
-// waitForAIChange returns a tea.Cmd that blocks until the next ai.md change
-// arrives on ch. Calling this repeatedly drains the channel one event at a time,
-// keeping the single long-lived watcher goroutine alive across events.
-func waitForAIChange(ch <-chan aiFileChangedMsg) tea.Cmd {
-	if ch == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		msg, ok := <-ch
-		if !ok {
-			return nil
-		}
-		return msg
-	}
 }

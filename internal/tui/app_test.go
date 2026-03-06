@@ -760,3 +760,28 @@ func TestTitleCompactHeader(t *testing.T) {
 		t.Error("title should appear in compact header mode too")
 	}
 }
+
+func TestTitleFileChangedMsgReloadsTitle(t *testing.T) {
+	app := testApp(t, []model.Todo{{Text: "task"}})
+	app = sendResize(t, app, 80, 24)
+
+	if app.title != "" {
+		t.Fatalf("expected empty title initially, got %q", app.title)
+	}
+
+	// Simulate external title change: write title to store, then send watcher event.
+	if err := app.store.SaveTitle("new title"); err != nil {
+		t.Fatalf("SaveTitle: %v", err)
+	}
+	updated, _ := app.Update(titleFileChangedMsg{})
+	app = updated.(App)
+
+	if app.title != "new title" {
+		t.Errorf("title = %q, want %q", app.title, "new title")
+	}
+
+	out := app.View()
+	if !strings.Contains(out, "new title") {
+		t.Error("expected new title to appear in rendered view")
+	}
+}

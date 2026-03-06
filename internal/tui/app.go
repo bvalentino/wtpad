@@ -54,8 +54,9 @@ const asciiHeader = `  ___       _________              _________
 const asciiHeaderHeight = 6
 
 type App struct {
-	store     *store.Store
-	aiEvents  <-chan aiFileChangedMsg // long-lived watcher channel; nil if watcher failed
+	store       *store.Store
+	aiEvents    <-chan aiFileChangedMsg    // long-lived watcher channel; nil if watcher failed
+	titleEvents <-chan titleFileChangedMsg // long-lived watcher channel; nil if watcher failed
 	width     int
 	height    int
 	activeTab activeTab
@@ -111,9 +112,11 @@ func New(cfg AppConfig) App {
 	if runes := []rune(title); len(runes) > maxTitleLen {
 		title = string(runes[:maxTitleLen])
 	}
+	wch := startDirWatcher(cfg.Store)
 	return App{
 		store:        cfg.Store,
-		aiEvents:     startAIWatcher(cfg.Store),
+		aiEvents:     wch.ai,
+		titleEvents:  wch.title,
 		promptStore:  cfg.PromptStore,
 		activeTab:    tabTodos,
 		mode:         modeNormal,
@@ -130,7 +133,10 @@ func New(cfg AppConfig) App {
 }
 
 func (a App) Init() tea.Cmd {
-	return waitForAIChange(a.aiEvents)
+	return tea.Batch(
+		waitForChange(a.aiEvents),
+		waitForChange(a.titleEvents),
+	)
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -144,7 +150,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a = a.switchTab(tabTodos)
 		}
 		// Re-subscribe for the next event from the long-lived watcher.
-		return a, waitForAIChange(a.aiEvents)
+		return a, waitForChange(a.aiEvents)
+	case titleFileChangedMsg:
+		if title, err := a.store.LoadTitle(); err != nil {
+			log.Printf("wtpad: failed to reload title: %v", err)
+		} else {
+			if runes := []rune(title); len(runes) > maxTitleLen {
+				title = string(runes[:maxTitleLen])
+			}
+			a.title = title
+		}
+		return a, waitForChange(a.titleEvents)
 	case clearPromptStatusMsg:
 		a.promptsPane, _ = a.promptsPane.Update(msg)
 		return a, nil
