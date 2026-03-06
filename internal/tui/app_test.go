@@ -501,8 +501,8 @@ func TestTitleInputMode(t *testing.T) {
 	app := testApp(t, nil)
 	app = sendResize(t, app, 80, 40)
 
-	// Press 't' enters modeTitleInput
-	updated, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	// Press ctrl+t enters modeTitleInput
+	updated, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	app = updated.(App)
 	if app.mode != modeTitleInput {
 		t.Fatalf("expected modeTitleInput, got %d", app.mode)
@@ -517,7 +517,7 @@ func TestTitleInputEnterSaves(t *testing.T) {
 	app = sendResize(t, app, 80, 40)
 
 	// Enter title input mode
-	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	app = updated.(App)
 
 	// Type a title
@@ -549,7 +549,7 @@ func TestTitleInputEscCancels(t *testing.T) {
 	app = sendResize(t, app, 80, 40)
 
 	// Enter title input mode
-	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	app = updated.(App)
 
 	// Type something different
@@ -581,7 +581,7 @@ func TestTitleInputPersists(t *testing.T) {
 	app = sendResize(t, app, 80, 40)
 
 	// Set title via TUI
-	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	app = updated.(App)
 	for _, r := range "Persisted Title" {
 		updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
@@ -670,8 +670,8 @@ func TestAIClearViaKeyKeepsLayout(t *testing.T) {
 	beforeView := app.View()
 	beforeLines := strings.Count(beforeView, "\n") + 1
 
-	// Press X to start confirm
-	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
+	// Press ctrl+x to start confirm
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
 	app = updated.(App)
 
 	// Press y to confirm clear

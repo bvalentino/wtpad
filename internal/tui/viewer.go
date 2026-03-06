@@ -62,7 +62,7 @@ func (v viewerModel) Update(msg tea.Msg) (viewerModel, tea.Cmd) {
 	contentH := overlayContentHeight(v.height)
 
 	switch keyMsg.String() {
-	case "esc", "q":
+	case "esc":
 		return v, func() tea.Msg { return exitViewerMsg{} }
 	case "?":
 		return v, func() tea.Msg { return enterHelpMsg{} }

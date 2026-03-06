@@ -39,12 +39,17 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle delete confirmation before any other key processing.
-	if m.confirmDelete {
+	// Handle delete/purge confirmation before any other key processing.
+	if m.confirm != confirmNone {
 		if keyMsg.String() == "y" {
-			m = m.deleteSelected()
+			switch m.confirm {
+			case confirmDelete:
+				m = m.deleteSelected()
+			case confirmPurge:
+				m.listPane = m.listPane.removeAll(m.store.DeleteNote)
+			}
 		}
-		m.confirmDelete = false
+		m.confirm = confirmNone
 		return m, nil
 	}
 
@@ -67,9 +72,12 @@ func (m notesModel) View() string {
 	}
 
 	var barContent string
-	if m.confirmDelete {
+	switch m.confirm {
+	case confirmDelete:
 		barContent = listConfirm.Render("Delete note? (y to confirm)")
-	} else {
+	case confirmPurge:
+		barContent = listConfirm.Render("Delete all notes? (y to confirm)")
+	default:
 		barContent = hintStyle.Render("Add Note (a)")
 	}
 

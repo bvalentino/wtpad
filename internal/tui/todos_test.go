@@ -277,10 +277,10 @@ func TestTodosDeleteConfirmCancel(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press x — should enter confirmation mode
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	// Press delete — should enter confirmation mode
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
 	if m.confirm != confirmDelete {
-		t.Fatal("expected confirm == confirmDelete after 'x'")
+		t.Fatal("expected confirm == confirmDelete after delete key")
 	}
 
 	// View should show confirmation text
@@ -307,8 +307,8 @@ func TestTodosDeleteConfirm(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press x then y to confirm delete
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	// Press delete then y to confirm delete
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
 	if m.confirm != confirmNone {
@@ -327,8 +327,8 @@ func TestTodosDeleteEmptyList(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press x on empty list — should not enter confirmation
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	// Press delete on empty list — should not enter confirmation
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
 	if m.confirm != confirmNone {
 		t.Error("should not enter confirmation on empty list")
 	}
@@ -344,10 +344,10 @@ func TestTodosPurgeConfirmCancel(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press X — should enter purge confirmation
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
+	// Press ctrl+x — should enter purge confirmation
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
 	if m.confirm != confirmPurge {
-		t.Fatal("expected confirm == confirmPurge after 'X'")
+		t.Fatal("expected confirm == confirmPurge after ctrl+x")
 	}
 
 	view := m.View()
@@ -377,8 +377,8 @@ func TestTodosPurgeConfirm(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press X then y to confirm purge of open todos
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
+	// Press ctrl+x then y to confirm purge of open todos
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
 	if m.confirm != confirmNone {
@@ -632,7 +632,7 @@ func TestPurgeSwitchesBackToPendingView(t *testing.T) {
 	}
 
 	// Purge done items
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
 	if m.showCompleted {

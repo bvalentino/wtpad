@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Direct tab switching with `t`/`n`/`p` keys; `Ctrl+X` to delete all in notes and prompts
+
+### Changed
+
+- Revised keybindings for consistency: `e` to edit, `Delete` to delete, `Ctrl+S` to save template, `Ctrl+T` to set title
+- Removed `q` to quit — use `Ctrl+C` only
+
+### Added
+
 - **AI tab**: read-only tab showing `.wtpad/ai.md` with live file watching
 - **`wtpad ai` CLI**: `add`, `start`, `done`, `ls`, `clear` for AI agent task tracking
 - **`wtpad ai install claude-code`**: set up Claude Code integration with cleanup-aware hooks

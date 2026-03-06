@@ -208,9 +208,9 @@ func TestPromptsDeleteConfirmation(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
-	if !m.confirmDelete {
-		t.Fatal("expected confirmDelete to be true after 'x'")
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	if m.confirm != confirmDelete {
+		t.Fatal("expected confirm == confirmDelete after delete key")
 	}
 
 	view := m.View()
@@ -220,7 +220,7 @@ func TestPromptsDeleteConfirmation(t *testing.T) {
 
 	// Cancel
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	if m.confirmDelete {
+	if m.confirm != confirmNone {
 		t.Error("confirmation should be cancelled")
 	}
 	if len(m.items) != 1 {
@@ -239,11 +239,11 @@ func TestPromptsDeleteConfirm(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
-	if m.confirmDelete {
-		t.Error("confirmDelete should be false after confirmation")
+	if m.confirm != confirmNone {
+		t.Error("confirm should be confirmNone after confirmation")
 	}
 	if len(m.items) != 0 {
 		t.Errorf("prompt should be deleted, got %d prompts", len(m.items))

@@ -39,7 +39,7 @@ func (h helpModel) Update(msg tea.Msg) (helpModel, tea.Cmd) {
 	contentH := overlayContentHeight(h.height)
 
 	switch keyMsg.String() {
-	case "esc", "q", "?":
+	case "esc", "?":
 		return h, func() tea.Msg { return exitHelpMsg{} }
 	case "up", "k":
 		if h.scrollOffset > 0 {
@@ -98,49 +98,42 @@ func (h helpModel) buildLines() []string {
 		keys []struct{ key, desc string }
 	}{
 		{"Global", []struct{ key, desc string }{
-			{"Tab", "Switch tab"},
-			{"t", "Set title"},
-			{"?", "Toggle this help"},
-			{"q / Ctrl+C", "Quit"},
+			{"t / n / p", "Switch to tab"},
+			{"Tab", "Cycle tabs"},
+			{"Ctrl+T", "Set title"},
+			{"Ctrl+C", "Quit"},
 		}},
 		{"Todos", []struct{ key, desc string }{
-			{"↑ / ↓", "Navigate"},
 			{"a", "Add todo"},
+			{"e", "Edit selected"},
 			{"Space", "Toggle done"},
 			{"i", "Toggle in progress"},
 			{"v", "View completed"},
-			{"Enter", "Edit selected"},
 			{"J / K", "Move todo down / up"},
-			{"x", "Delete selected"},
-			{"X", "Clear all in view"},
+			{"Delete", "Delete selected"},
+			{"Ctrl+X", "Clear all in view"},
 			{"c", "Copy selected"},
 			{"T", "Import template"},
-			{"S", "Save as template"},
+			{"Ctrl+S", "Save as template"},
 		}},
 		{"Notes", []struct{ key, desc string }{
-			{"↑ / ↓", "Navigate"},
 			{"a", "New note"},
 			{"Enter", "View selected"},
 			{"e", "Edit selected"},
-			{"x", "Delete selected"},
+			{"Delete", "Delete selected"},
+			{"Ctrl+X", "Delete all"},
 		}},
 		{"Prompts", []struct{ key, desc string }{
-			{"↑ / ↓", "Navigate"},
-			{"c", "Copy to clipboard"},
-			{"Enter", "View selected"},
 			{"a", "New prompt"},
+			{"Enter", "View selected"},
 			{"e", "Edit selected"},
-			{"x", "Delete selected"},
-		}},
-		{"AI", []struct{ key, desc string }{
-			{"↑ / ↓", "Navigate"},
 			{"c", "Copy selected"},
-			{"X", "Clear all"},
+			{"Delete", "Delete selected"},
+			{"Ctrl+X", "Delete all"},
 		}},
-		{"Viewer / Editor", []struct{ key, desc string }{
-			{"e", "Edit (viewer)"},
-			{"Ctrl+S", "Save (editor)"},
-			{"Esc", "Back / discard"},
+		{"AI (when used)", []struct{ key, desc string }{
+			{"c", "Copy selected"},
+			{"Ctrl+X", "Clear all"},
 		}},
 	}
 

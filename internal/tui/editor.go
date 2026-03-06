@@ -74,7 +74,7 @@ func (e editorModel) Update(msg tea.Msg) (editorModel, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "ctrl+s", "ctrl+d":
+		case "ctrl+s":
 			return e.save()
 		case "esc":
 			if e.dirty() {

@@ -71,12 +71,17 @@ func (m promptsModel) Update(msg tea.Msg) (promptsModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle delete confirmation before any other key processing.
-	if m.confirmDelete {
+	// Handle delete/purge confirmation before any other key processing.
+	if m.confirm != confirmNone {
 		if keyMsg.String() == "y" {
-			m = m.deleteSelected()
+			switch m.confirm {
+			case confirmDelete:
+				m = m.deleteSelected()
+			case confirmPurge:
+				m.listPane = m.listPane.removeAll(m.store.DeletePrompt)
+			}
 		}
-		m.confirmDelete = false
+		m.confirm = confirmNone
 		return m, nil
 	}
 
@@ -120,9 +125,12 @@ func (m promptsModel) View() string {
 	}
 
 	var barContent string
-	if m.confirmDelete {
+	switch m.confirm {
+	case confirmDelete:
 		barContent = listConfirm.Render("Delete prompt? (y to confirm)")
-	} else {
+	case confirmPurge:
+		barContent = listConfirm.Render("Delete all prompts? (y to confirm)")
+	default:
 		barContent = hintStyle.Render("Copy (c) · Add (a)")
 	}
 

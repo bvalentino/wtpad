@@ -54,20 +54,6 @@ func TestViewerEscExits(t *testing.T) {
 	}
 }
 
-func TestViewerQExits(t *testing.T) {
-	var v viewerModel
-	v = v.openViewer("test", "body", 60, 20)
-
-	_, cmd := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if cmd == nil {
-		t.Fatal("q should produce a command")
-	}
-	msg := cmd()
-	if _, ok := msg.(exitViewerMsg); !ok {
-		t.Fatalf("expected exitViewerMsg, got %T", msg)
-	}
-}
-
 func TestViewerEOpensEditor(t *testing.T) {
 	var v viewerModel
 	v = v.openViewer("20260228-143000", "hello world", 60, 20)
