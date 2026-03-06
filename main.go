@@ -349,15 +349,13 @@ func cmdAIClear(s *store.Store) {
 	fmt.Println("AI tasks cleared.")
 }
 
-const promptText = `## wtpad AI Task Tracking
+const promptText = `You MUST use wtpad to track your work so the user can see progress in real time.
 
-Track your work using ` + "`wtpad ai`" + ` commands so progress is visible in the wtpad TUI:
+Run these commands via the Bash tool:
+- Before starting work: wtpad ai start "short task description"
+- After completing work: wtpad ai done "short task description"
+- To queue a task for later: wtpad ai add "short task description"
 
-- Before starting work: ` + "`wtpad ai start \"task description\"`" + `
-- After completing work: ` + "`wtpad ai done \"task description\"`" + `
-- To add a task for later: ` + "`wtpad ai add \"task description\"`" + `
-
-Always start a task before doing the work so the user can see what you're working on in real time.
 Keep descriptions short — they display in a narrow terminal pane.`
 
 func cmdAIPrompt(s *store.Store) {
