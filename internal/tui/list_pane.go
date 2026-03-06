@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"log"
 	"strings"
 	"time"
 
@@ -37,8 +38,8 @@ type listPane struct {
 	scrollOffset  int
 	width         int
 	height        int
-	focused       bool
-	confirmDelete bool
+	focused bool
+	confirm confirmKind
 }
 
 func (lp listPane) moveCursor(delta int) listPane {
@@ -280,6 +281,21 @@ func (lp listPane) loadBodies(loadFn func(string) (string, error)) listPane {
 	return lp
 }
 
+// removeAll deletes all items using the given function, keeping any that fail.
+func (lp listPane) removeAll(deleteFn func(string) error) listPane {
+	var kept []listItem
+	for _, item := range lp.items {
+		if err := deleteFn(item.Name); err != nil {
+			log.Printf("wtpad: failed to delete %s: %v", item.Name, err)
+			kept = append(kept, item)
+		}
+	}
+	lp.items = kept
+	lp = lp.clampCursor()
+	lp = lp.adjustScroll()
+	return lp
+}
+
 // removeItem removes the item at the given index and adjusts cursor/scroll.
 func (lp listPane) removeItem(idx int) listPane {
 	lp.items = append(lp.items[:idx], lp.items[idx+1:]...)
@@ -311,10 +327,10 @@ func (lp listPane) setFocus(focused bool) listPane {
 // delete confirmation). Returns the updated pane, an optional command, and
 // whether the key was handled.
 func (lp listPane) handleKey(keyMsg tea.KeyMsg) (listPane, tea.Cmd, bool) {
-	// During confirmDelete, "y" is handled by the consumer (which performs the
-	// actual store delete). Any other key cancels.
-	if lp.confirmDelete {
-		lp.confirmDelete = false
+	// During confirm mode, "y" is handled by the consumer (which performs the
+	// actual store operation). Any other key cancels.
+	if lp.confirm != confirmNone {
+		lp.confirm = confirmNone
 		return lp, nil, true
 	}
 
@@ -341,9 +357,14 @@ func (lp listPane) handleKey(keyMsg tea.KeyMsg) (listPane, tea.Cmd, bool) {
 			}, true
 		}
 		return lp, nil, true
-	case "x", "delete":
+	case "backspace", "delete":
 		if len(lp.items) > 0 {
-			lp.confirmDelete = true
+			lp.confirm = confirmDelete
+		}
+		return lp, nil, true
+	case "ctrl+x":
+		if len(lp.items) > 0 {
+			lp.confirm = confirmPurge
 		}
 		return lp, nil, true
 	}

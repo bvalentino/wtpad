@@ -148,7 +148,7 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		m.inputActive = true
 		m.editIndex = -1
 		return m, func() tea.Msg { return enterInputMsg{} }
-	case "enter":
+	case "e":
 		if len(m.todos) > 0 {
 			m.input.SetValue(m.todos[m.cursor].Text)
 			m.input.CursorEnd() // SetValue preserves stale cursor position; force to end
@@ -161,7 +161,7 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		m = m.toggleDone()
 	case "i":
 		m = m.toggleInProgress()
-	case "x", "delete":
+	case "backspace", "delete":
 		if len(m.todos) > 0 {
 			m.confirm = confirmDelete
 		}
@@ -169,7 +169,7 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		m = m.moveTodo(1)
 	case "K":
 		m = m.moveTodo(-1)
-	case "X":
+	case "ctrl+x":
 		m.confirm = confirmPurge
 	case "v":
 		m.showCompleted = !m.showCompleted
@@ -188,7 +188,7 @@ func (m todosModel) updateNormal(msg tea.Msg) (todosModel, tea.Cmd) {
 		}
 	case "T":
 		return m, func() tea.Msg { return enterTemplateMsg{saving: false} }
-	case "S":
+	case "ctrl+s":
 		return m, func() tea.Msg { return enterTemplateMsg{saving: true} }
 	}
 
@@ -807,9 +807,9 @@ func (m todosModel) ShowingCompleted() bool {
 // FooterHint returns the mode-aware hint string for the footer.
 func (m todosModel) FooterHint() string {
 	if m.showCompleted {
-		return "v back · ? help · tab switch"
+		return "v back · ? help"
 	}
-	return "? help · tab switch"
+	return "? help"
 }
 
 // Counts returns the number of todos in each status.

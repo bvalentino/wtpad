@@ -269,15 +269,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a = a.switchTab(tabTodos)
 				}
 				return a, nil
+			case "t":
+				a = a.switchTab(tabTodos)
+				return a, nil
+			case "n":
+				a = a.switchTab(tabNotes)
+				return a, nil
+			case "p":
+				a = a.switchTab(tabPrompts)
+				return a, nil
 			case "?":
 				return a, func() tea.Msg { return enterHelpMsg{} }
-			case "t":
+			case "ctrl+t":
 				a.titleInput.SetValue(a.title)
 				a.titleInput.Focus()
 				a.mode = modeTitleInput
 				return a, textinput.Blink
-			case "q":
-				return a, tea.Quit
 			}
 		}
 
@@ -721,11 +728,11 @@ func (a App) renderFooter() string {
 		if msg := a.promptsPane.StatusMsg(); msg != "" {
 			return footerStyle.Render(counts + " · " + msg)
 		}
-		hint = "? help · tab switch · q quit"
+		hint = "? help"
 
 	case tabNotes:
 		counts = pluralize(a.notesPane.count(), "note")
-		hint = "? help · tab switch · q quit"
+		hint = "? help"
 
 	case tabTodos:
 		c := a.todosPane.Counts()

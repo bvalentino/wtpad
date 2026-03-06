@@ -96,7 +96,7 @@ func (m aiModel) Update(msg tea.Msg) (aiModel, tea.Cmd) {
 		m = m.moveCursor(1)
 	case "up":
 		m = m.moveCursor(-1)
-	case "X":
+	case "ctrl+x":
 		if len(m.todos) > 0 {
 			m.confirm = confirmPurge
 		}
@@ -354,7 +354,7 @@ func (m aiModel) adjustScroll() aiModel {
 
 // FooterHint returns the hint string for the footer bar.
 func (m aiModel) FooterHint() string {
-	return "? help · tab switch · q quit"
+	return "? help"
 }
 
 // count returns the number of AI todos.

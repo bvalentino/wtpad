@@ -159,10 +159,10 @@ func TestNotesDeleteConfirmation(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press x — should show confirmation
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
-	if !m.confirmDelete {
-		t.Fatal("expected confirmDelete to be true after 'x'")
+	// Press delete — should show confirmation
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	if m.confirm != confirmDelete {
+		t.Fatal("expected confirm == confirmDelete after delete key")
 	}
 
 	// View should show confirmation text
@@ -173,7 +173,7 @@ func TestNotesDeleteConfirmation(t *testing.T) {
 
 	// Press 'n' to cancel
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	if m.confirmDelete {
+	if m.confirm != confirmNone {
 		t.Error("confirmation should be cancelled")
 	}
 	if len(m.items) != 1 {
@@ -192,12 +192,12 @@ func TestNotesDeleteConfirm(t *testing.T) {
 	m = m.SetSize(40, 10)
 	m = m.SetFocus(true)
 
-	// Press x then y to confirm
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	// Press delete then y to confirm
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
-	if m.confirmDelete {
-		t.Error("confirmDelete should be false after confirmation")
+	if m.confirm != confirmNone {
+		t.Error("confirm should be confirmNone after confirmation")
 	}
 	if len(m.items) != 0 {
 		t.Errorf("note should be deleted, got %d notes", len(m.items))
