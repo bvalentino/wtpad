@@ -19,6 +19,7 @@ const (
 	tabTodos activeTab = iota
 	tabNotes
 	tabPrompts
+	tabAI
 )
 
 type appMode int
@@ -53,7 +54,9 @@ const asciiHeader = `  ___       _________              _________
 const asciiHeaderHeight = 6
 
 type App struct {
-	store     *store.Store
+	store       *store.Store
+	aiEvents    <-chan aiFileChangedMsg    // long-lived watcher channel; nil if watcher failed
+	titleEvents <-chan titleFileChangedMsg // long-lived watcher channel; nil if watcher failed
 	width     int
 	height    int
 	activeTab activeTab
@@ -76,6 +79,7 @@ type App struct {
 	todosPane    todosModel
 	notesPane    notesModel
 	promptsPane  promptsModel
+	aiPane       aiModel
 	editorPane   editorModel
 	viewerPane   viewerModel
 	helpPane     helpModel
@@ -92,6 +96,7 @@ type AppConfig struct {
 	Todos         []model.Todo
 	Notes         []model.Note
 	Prompts       []model.Note
+	AITodos       []model.Todo
 	Branch        string
 	Title         string
 }
@@ -107,8 +112,11 @@ func New(cfg AppConfig) App {
 	if runes := []rune(title); len(runes) > maxTitleLen {
 		title = string(runes[:maxTitleLen])
 	}
+	wch := startDirWatcher(cfg.Store)
 	return App{
 		store:        cfg.Store,
+		aiEvents:     wch.ai,
+		titleEvents:  wch.title,
 		promptStore:  cfg.PromptStore,
 		activeTab:    tabTodos,
 		mode:         modeNormal,
@@ -118,17 +126,41 @@ func New(cfg AppConfig) App {
 		todosPane:    tp,
 		notesPane:    np,
 		promptsPane:  pp,
+		aiPane:       newAI(cfg.AITodos, cfg.Store),
 		editorPane:   newEditorModel(),
 		templatePane: newTemplateModal(cfg.TemplateStore),
 	}
 }
 
 func (a App) Init() tea.Cmd {
-	return nil
+	return tea.Batch(
+		waitForChange(a.aiEvents),
+		waitForChange(a.titleEvents),
+	)
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
+	case clearAIStatusMsg:
+		a.aiPane, _ = a.aiPane.Update(msg)
+		return a, nil
+	case aiFileChangedMsg:
+		a.aiPane, _ = a.aiPane.Update(msg)
+		if a.activeTab == tabAI && !a.showAITab() {
+			a = a.switchTab(tabTodos)
+		}
+		// Re-subscribe for the next event from the long-lived watcher.
+		return a, waitForChange(a.aiEvents)
+	case titleFileChangedMsg:
+		if title, err := a.store.LoadTitle(); err != nil {
+			log.Printf("wtpad: failed to reload title: %v", err)
+		} else {
+			if runes := []rune(title); len(runes) > maxTitleLen {
+				title = string(runes[:maxTitleLen])
+			}
+			a.title = title
+		}
+		return a, waitForChange(a.titleEvents)
 	case clearPromptStatusMsg:
 		a.promptsPane, _ = a.promptsPane.Update(msg)
 		return a, nil
@@ -230,6 +262,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case tabNotes:
 					a = a.switchTab(tabPrompts)
 				case tabPrompts:
+					if a.showAITab() {
+						a = a.switchTab(tabAI)
+					} else {
+						a = a.switchTab(tabTodos)
+					}
+				case tabAI:
 					a = a.switchTab(tabTodos)
 				}
 				return a, nil
@@ -305,6 +343,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.notesPane, cmd = a.notesPane.Update(msg)
 	case tabPrompts:
 		a.promptsPane, cmd = a.promptsPane.Update(msg)
+	case tabAI:
+		a.aiPane, cmd = a.aiPane.Update(msg)
+		if !a.showAITab() {
+			a = a.switchTab(tabTodos)
+		}
 	}
 	return a, cmd
 }
@@ -462,11 +505,9 @@ func (a App) renderHeader() string {
 // Lines 1-2 (top border + label) are rendered by lipgloss borders with a
 // 1-space gap between tabs. Line 3 (connection to content area) is manually
 // constructed so the active tab opening flows into the content box.
+//
+// When showAITab() is true, a 4th "AI" tab is appended.
 func (a App) renderTabStrip() string {
-	todoLabel := "Todo"
-	noteLabel := "Notes"
-	promptLabel := "Prompts"
-
 	renderTab := func(label string, active bool) string {
 		if active {
 			return activeTabStyle.Render(label)
@@ -474,15 +515,25 @@ func (a App) renderTabStrip() string {
 		return inactiveTabStyle.Render(label)
 	}
 
-	todoTab := renderTab(todoLabel, a.activeTab == tabTodos)
-	noteTab := renderTab(noteLabel, a.activeTab == tabNotes)
-	promptTab := renderTab(promptLabel, a.activeTab == tabPrompts)
+	todoTab := renderTab("Todo", a.activeTab == tabTodos)
+	noteTab := renderTab("Notes", a.activeTab == tabNotes)
+	promptTab := renderTab("Prompts", a.activeTab == tabPrompts)
+
+	showAI := a.showAITab()
 
 	// Lines 1-2: join tabs with a 1-space gap
 	gap := lipgloss.NewStyle().Width(1)
-	row := lipgloss.JoinHorizontal(lipgloss.Top,
-		todoTab, gap.Render(" "), noteTab, gap.Render(" "), promptTab,
-	)
+	var row string
+	if showAI {
+		aiTab := renderTab("AI", a.activeTab == tabAI)
+		row = lipgloss.JoinHorizontal(lipgloss.Top,
+			todoTab, gap.Render(" "), noteTab, gap.Render(" "), promptTab, gap.Render(" "), aiTab,
+		)
+	} else {
+		row = lipgloss.JoinHorizontal(lipgloss.Top,
+			todoTab, gap.Render(" "), noteTab, gap.Render(" "), promptTab,
+		)
+	}
 
 	// Pad lines 1-2 to terminal width
 	rowLines := strings.Split(row, "\n")
@@ -502,31 +553,89 @@ func (a App) renderTabStrip() string {
 	noteInner := noteW - 2
 	promptInner := promptW - 2
 
-	// tabsSpan = total columns consumed by tabs + gaps (2 gaps of 1 char each)
-	tabsSpan := todoW + 1 + noteW + 1 + promptW
-
-	fill := a.width - tabsSpan - 1 // -1 for the ╮ right-edge cap
-	if fill < 0 {
-		fill = 0
-	}
-
 	var line3 string
-	switch a.activeTab {
-	case tabTodos:
-		line3 = "│" + strings.Repeat(" ", todoInner) +
-			"╰─┴" + strings.Repeat("─", noteInner) +
-			"┴─┴" + strings.Repeat("─", promptInner) +
-			"┴" + strings.Repeat("─", fill) + "╮"
-	case tabNotes:
-		line3 = "├" + strings.Repeat("─", todoInner) +
-			"┴─╯" + strings.Repeat(" ", noteInner) +
-			"╰─┴" + strings.Repeat("─", promptInner) +
-			"┴" + strings.Repeat("─", fill) + "╮"
-	case tabPrompts:
-		line3 = "├" + strings.Repeat("─", todoInner) +
-			"┴─┴" + strings.Repeat("─", noteInner) +
-			"┴─╯" + strings.Repeat(" ", promptInner) +
-			"╰" + strings.Repeat("─", fill) + "╮"
+
+	if showAI {
+		aiTab := renderTab("AI", a.activeTab == tabAI)
+		aiW := lipgloss.Width(aiTab)
+		aiInner := aiW - 2
+
+		// tabsSpan = total columns consumed by 4 tabs + 3 gaps (1 char each)
+		// = todoW(1) + gap(1) + noteW(1) + gap(1) + promptW(1) + gap(1) + aiW(1)
+		tabsSpan := todoW + 1 + noteW + 1 + promptW + 1 + aiW
+
+		// fill = remaining space minus ╮(1) right-edge cap
+		fill := a.width - tabsSpan - 1
+		if fill < 0 {
+			fill = 0
+		}
+
+		// Character count per line3 case (4 tabs):
+		// Fixed chars: left(1) + 3 junctions of "X─┴"(3 each=9) + ┴(1) + ╮(1) = 12
+		// Variable: todoInner + noteInner + promptInner + aiInner + fill
+		// Total: 12 + todoInner + noteInner + promptInner + aiInner + fill = width ✓
+		switch a.activeTab {
+		case tabTodos:
+			// │<spaces>╰─┴<─>┴─┴<─>┴─┴<─>┴<─>╮
+			line3 = "│" + strings.Repeat(" ", todoInner) +
+				"╰─┴" + strings.Repeat("─", noteInner) +
+				"┴─┴" + strings.Repeat("─", promptInner) +
+				"┴─┴" + strings.Repeat("─", aiInner) +
+				"┴" + strings.Repeat("─", fill) + "╮"
+		case tabNotes:
+			// ├<─>┴─╯<spaces>╰─┴<─>┴─┴<─>┴<─>╮
+			line3 = "├" + strings.Repeat("─", todoInner) +
+				"┴─╯" + strings.Repeat(" ", noteInner) +
+				"╰─┴" + strings.Repeat("─", promptInner) +
+				"┴─┴" + strings.Repeat("─", aiInner) +
+				"┴" + strings.Repeat("─", fill) + "╮"
+		case tabPrompts:
+			// ├<─>┴─┴<─>┴─╯<spaces>╰─┴<─>┴<─>╮
+			line3 = "├" + strings.Repeat("─", todoInner) +
+				"┴─┴" + strings.Repeat("─", noteInner) +
+				"┴─╯" + strings.Repeat(" ", promptInner) +
+				"╰─┴" + strings.Repeat("─", aiInner) +
+				"┴" + strings.Repeat("─", fill) + "╮"
+		case tabAI:
+			// ├<─>┴─┴<─>┴─┴<─>┴─╯<spaces>╰<─>╮
+			line3 = "├" + strings.Repeat("─", todoInner) +
+				"┴─┴" + strings.Repeat("─", noteInner) +
+				"┴─┴" + strings.Repeat("─", promptInner) +
+				"┴─╯" + strings.Repeat(" ", aiInner) +
+				"╰" + strings.Repeat("─", fill) + "╮"
+		}
+	} else {
+		// 3-tab layout (no AI tab)
+		// tabsSpan = total columns consumed by 3 tabs + 2 gaps (1 char each)
+		tabsSpan := todoW + 1 + noteW + 1 + promptW
+
+		// fill = remaining space minus ╮(1) right-edge cap
+		fill := a.width - tabsSpan - 1
+		if fill < 0 {
+			fill = 0
+		}
+
+		// Character count per line3 case (3 tabs):
+		// Fixed chars: left(1) + 2 junctions of "X─┴"(3 each=6) + ┴(1) + ╮(1) = 9
+		// Variable: todoInner + noteInner + promptInner + fill
+		// Total: 9 + todoInner + noteInner + promptInner + fill = width ✓
+		switch a.activeTab {
+		case tabTodos:
+			line3 = "│" + strings.Repeat(" ", todoInner) +
+				"╰─┴" + strings.Repeat("─", noteInner) +
+				"┴─┴" + strings.Repeat("─", promptInner) +
+				"┴" + strings.Repeat("─", fill) + "╮"
+		case tabNotes:
+			line3 = "├" + strings.Repeat("─", todoInner) +
+				"┴─╯" + strings.Repeat(" ", noteInner) +
+				"╰─┴" + strings.Repeat("─", promptInner) +
+				"┴" + strings.Repeat("─", fill) + "╮"
+		case tabPrompts:
+			line3 = "├" + strings.Repeat("─", todoInner) +
+				"┴─┴" + strings.Repeat("─", noteInner) +
+				"┴─╯" + strings.Repeat(" ", promptInner) +
+				"╰" + strings.Repeat("─", fill) + "╮"
+		}
 	}
 	line3 = dimBorder.Render(line3)
 
@@ -543,6 +652,8 @@ func (a App) renderContent() string {
 		content = a.notesPane.View()
 	case tabPrompts:
 		content = a.promptsPane.View()
+	case tabAI:
+		content = a.aiPane.View()
 	}
 
 	// Split content into lines and pad/frame each with side borders
@@ -590,6 +701,13 @@ func (a App) renderFooter() string {
 	var counts, hint string
 
 	switch a.activeTab {
+	case tabAI:
+		counts = pluralize(a.aiPane.count(), "task")
+		if msg := a.aiPane.StatusMsg(); msg != "" {
+			return footerStyle.Render(counts + " · " + msg)
+		}
+		hint = a.aiPane.FooterHint()
+
 	case tabPrompts:
 		counts = pluralize(a.promptsPane.count(), "prompt")
 		if msg := a.promptsPane.StatusMsg(); msg != "" {
@@ -660,6 +778,7 @@ func (a App) layoutVertical() App {
 	a.todosPane = a.todosPane.SetSize(a.contentWidth, a.contentHeight)
 	a.notesPane = a.notesPane.SetSize(a.contentWidth, a.contentHeight)
 	a.promptsPane = a.promptsPane.SetSize(a.contentWidth, a.contentHeight)
+	a.aiPane = a.aiPane.SetSize(a.contentWidth, a.contentHeight)
 	return a
 }
 
@@ -724,5 +843,11 @@ func (a App) switchTab(tab activeTab) App {
 	a.todosPane = a.todosPane.SetFocus(tab == tabTodos)
 	a.notesPane = a.notesPane.SetFocus(tab == tabNotes)
 	a.promptsPane = a.promptsPane.SetFocus(tab == tabPrompts)
+	a.aiPane = a.aiPane.SetFocus(tab == tabAI)
 	return a
+}
+
+// showAITab reports whether the AI tab should be visible.
+func (a App) showAITab() bool {
+	return a.aiPane.HasItems() || a.aiPane.fileExists
 }

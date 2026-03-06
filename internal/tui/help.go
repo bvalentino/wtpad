@@ -132,6 +132,11 @@ func (h helpModel) buildLines() []string {
 			{"e", "Edit selected"},
 			{"x", "Delete selected"},
 		}},
+		{"AI", []struct{ key, desc string }{
+			{"↑ / ↓", "Navigate"},
+			{"c", "Copy selected"},
+			{"X", "Clear all"},
+		}},
 		{"Viewer / Editor", []struct{ key, desc string }{
 			{"e", "Edit (viewer)"},
 			{"Ctrl+S", "Save (editor)"},

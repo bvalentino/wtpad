@@ -600,6 +600,147 @@ func TestTitleInputPersists(t *testing.T) {
 	}
 }
 
+func testAppWithAI(t *testing.T, aiTodos []model.Todo) App {
+	t.Helper()
+	s := tempStore(t)
+	return New(AppConfig{
+		Store:         s,
+		TemplateStore: tempTemplateStoreForApp(t),
+		PromptStore:   tempPromptStoreForApp(t),
+		AITodos:       aiTodos,
+		Branch:        "main",
+	})
+}
+
+func switchToAITab(t *testing.T, app App) App {
+	t.Helper()
+	for i := 0; i < 10 && app.activeTab != tabAI; i++ {
+		updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
+		app = updated.(App)
+	}
+	if app.activeTab != tabAI {
+		t.Fatal("could not switch to AI tab (tab not visible?)")
+	}
+	return app
+}
+
+func TestAIClearKeepsLayoutStable(t *testing.T) {
+	aiTodos := []model.Todo{
+		{Text: "task A", Status: model.StatusOpen},
+		{Text: "task B", Status: model.StatusInProgress},
+		{Text: "task C", Status: model.StatusDone},
+	}
+	app := testAppWithAI(t, aiTodos)
+	app = sendResize(t, app, 80, 40)
+	app = switchToAITab(t, app)
+
+	beforeView := app.View()
+	beforeLines := strings.Count(beforeView, "\n") + 1
+
+	// Simulate external clear: remove ai.md, then file watcher fires
+	app.store.ClearAI()
+	updated, _ := app.Update(aiFileChangedMsg{})
+	app = updated.(App)
+
+	afterView := app.View()
+	afterLines := strings.Count(afterView, "\n") + 1
+
+	if beforeLines != afterLines {
+		t.Errorf("layout changed after AI clear: had %d lines, now %d lines", beforeLines, afterLines)
+	}
+
+	// Verify borders are intact
+	if !strings.Contains(afterView, "╰") {
+		t.Error("bottom border missing after clear")
+	}
+	if !strings.Contains(afterView, "│") {
+		t.Error("side borders missing after clear")
+	}
+}
+
+func TestAIClearViaKeyKeepsLayout(t *testing.T) {
+	aiTodos := []model.Todo{
+		{Text: "task A", Status: model.StatusOpen},
+		{Text: "task B", Status: model.StatusInProgress},
+	}
+	app := testAppWithAI(t, aiTodos)
+	app = sendResize(t, app, 80, 40)
+	app = switchToAITab(t, app)
+
+	beforeView := app.View()
+	beforeLines := strings.Count(beforeView, "\n") + 1
+
+	// Press X to start confirm
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
+	app = updated.(App)
+
+	// Press y to confirm clear
+	updated, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	app = updated.(App)
+
+	afterView := app.View()
+	afterLines := strings.Count(afterView, "\n") + 1
+
+	if beforeLines != afterLines {
+		t.Errorf("layout changed after TUI clear: had %d lines, now %d lines", beforeLines, afterLines)
+	}
+	if app.activeTab == tabAI {
+		t.Error("expected to switch away from AI tab after keyboard clear")
+	}
+	if app.showAITab() {
+		t.Error("AI tab should be hidden after keyboard clear")
+	}
+}
+
+func TestAIClearSmallTerminal(t *testing.T) {
+	aiTodos := []model.Todo{
+		{Text: "task A", Status: model.StatusOpen},
+	}
+	app := testAppWithAI(t, aiTodos)
+	app = sendResize(t, app, 60, 15) // small terminal
+	app = switchToAITab(t, app)
+
+	beforeView := app.View()
+	beforeLines := strings.Count(beforeView, "\n") + 1
+
+	app.store.ClearAI()
+	updated, _ := app.Update(aiFileChangedMsg{})
+	app = updated.(App)
+
+	afterView := app.View()
+	afterLines := strings.Count(afterView, "\n") + 1
+
+	if beforeLines != afterLines {
+		t.Errorf("layout changed after clear (small terminal): had %d lines, now %d lines", beforeLines, afterLines)
+	}
+}
+
+func TestAIClearSwitchesAwayFromAITab(t *testing.T) {
+	aiTodos := []model.Todo{
+		{Text: "task A", Status: model.StatusOpen},
+	}
+	app := testAppWithAI(t, aiTodos)
+	app = sendResize(t, app, 80, 40)
+	app = switchToAITab(t, app)
+
+	if app.activeTab != tabAI {
+		t.Fatalf("expected to be on AI tab, got %d", app.activeTab)
+	}
+
+	// Simulate external clear: remove ai.md, watcher fires
+	app.store.ClearAI()
+	updated, _ := app.Update(aiFileChangedMsg{})
+	app = updated.(App)
+
+	if app.activeTab == tabAI {
+		t.Error("expected to switch away from AI tab after clear")
+	}
+
+	if app.showAITab() {
+		t.Error("AI tab should be hidden after clear")
+	}
+}
+
 func TestTitleCompactHeader(t *testing.T) {
 	app := testAppWithTitle(t, nil, "My Project")
 
@@ -617,5 +758,30 @@ func TestTitleCompactHeader(t *testing.T) {
 	out := app.View()
 	if !strings.Contains(out, "My Project") {
 		t.Error("title should appear in compact header mode too")
+	}
+}
+
+func TestTitleFileChangedMsgReloadsTitle(t *testing.T) {
+	app := testApp(t, []model.Todo{{Text: "task"}})
+	app = sendResize(t, app, 80, 24)
+
+	if app.title != "" {
+		t.Fatalf("expected empty title initially, got %q", app.title)
+	}
+
+	// Simulate external title change: write title to store, then send watcher event.
+	if err := app.store.SaveTitle("new title"); err != nil {
+		t.Fatalf("SaveTitle: %v", err)
+	}
+	updated, _ := app.Update(titleFileChangedMsg{})
+	app = updated.(App)
+
+	if app.title != "new title" {
+		t.Errorf("title = %q, want %q", app.title, "new title")
+	}
+
+	out := app.View()
+	if !strings.Contains(out, "new title") {
+		t.Error("expected new title to appear in rendered view")
 	}
 }

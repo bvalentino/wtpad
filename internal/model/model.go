@@ -17,6 +17,18 @@ type Todo struct {
 	Status TodoStatus
 }
 
+// GFMLine returns the todo as a GFM task list line (e.g. "- [x] task text").
+func (t Todo) GFMLine() string {
+	switch t.Status {
+	case StatusDone:
+		return "- [x] " + t.Text
+	case StatusInProgress:
+		return "- [~] " + t.Text
+	default:
+		return "- [ ] " + t.Text
+	}
+}
+
 // Note represents a single markdown note file in .wtpad/.
 type Note struct {
 	Name      string    // filename without .md extension (e.g., "20260228-143022")

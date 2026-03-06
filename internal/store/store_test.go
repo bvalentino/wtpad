@@ -469,10 +469,147 @@ func TestSaveTitleWhitespaceOnlyClears(t *testing.T) {
 	}
 }
 
+func TestLoadAIMissingFile(t *testing.T) {
+	s := tempStore(t)
+	todos, err := s.LoadAI()
+	if err != nil {
+		t.Fatalf("LoadAI: %v", err)
+	}
+	if len(todos) != 0 {
+		t.Errorf("expected empty slice, got %d todos", len(todos))
+	}
+}
+
+func TestLoadAIWithContent(t *testing.T) {
+	s := tempStore(t)
+	os.MkdirAll(s.Dir(), 0o700)
+	content := "- [ ] Open task\n- [~] In progress\n- [x] Done task\n"
+	os.WriteFile(filepath.Join(s.Dir(), "ai.md"), []byte(content), 0o600)
+
+	todos, err := s.LoadAI()
+	if err != nil {
+		t.Fatalf("LoadAI: %v", err)
+	}
+	if len(todos) != 3 {
+		t.Fatalf("got %d todos, want 3", len(todos))
+	}
+	if todos[0].Text != "Open task" || todos[0].Status != model.StatusOpen {
+		t.Errorf("todo[0] = %+v, want open 'Open task'", todos[0])
+	}
+	if todos[1].Text != "In progress" || todos[1].Status != model.StatusInProgress {
+		t.Errorf("todo[1] = %+v, want in-progress 'In progress'", todos[1])
+	}
+	if todos[2].Text != "Done task" || todos[2].Status != model.StatusDone {
+		t.Errorf("todo[2] = %+v, want done 'Done task'", todos[2])
+	}
+}
+
+func TestLoadAISkipsNonTaskLines(t *testing.T) {
+	s := tempStore(t)
+	os.MkdirAll(s.Dir(), 0o700)
+	content := "# AI Tasks\n\n- [ ] Real task\nsome random text\n- [x] Another\n"
+	os.WriteFile(filepath.Join(s.Dir(), "ai.md"), []byte(content), 0o600)
+
+	todos, err := s.LoadAI()
+	if err != nil {
+		t.Fatalf("LoadAI: %v", err)
+	}
+	if len(todos) != 2 {
+		t.Fatalf("got %d todos, want 2 (non-task lines skipped)", len(todos))
+	}
+}
+
+func TestClearAI(t *testing.T) {
+	s := tempStore(t)
+	os.MkdirAll(s.Dir(), 0o700)
+	os.WriteFile(filepath.Join(s.Dir(), "ai.md"), []byte("- [ ] task\n"), 0o600)
+
+	if err := s.ClearAI(); err != nil {
+		t.Fatalf("ClearAI: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(s.Dir(), "ai.md")); !os.IsNotExist(err) {
+		t.Errorf("expected ai.md to be removed, got err=%v", err)
+	}
+}
+
+func TestClearAIMissingFile(t *testing.T) {
+	s := tempStore(t)
+	// Should not error when file doesn't exist.
+	if err := s.ClearAI(); err != nil {
+		t.Fatalf("ClearAI on missing file: %v", err)
+	}
+}
+
+func TestAIExists(t *testing.T) {
+	s := tempStore(t)
+	if s.AIExists() {
+		t.Error("AIExists should be false when ai.md doesn't exist")
+	}
+
+	os.MkdirAll(s.Dir(), 0o700)
+	os.WriteFile(filepath.Join(s.Dir(), "ai.md"), []byte("- [ ] task\n"), 0o600)
+
+	if !s.AIExists() {
+		t.Error("AIExists should be true when ai.md exists")
+	}
+}
+
+func TestListNotesExcludesAI(t *testing.T) {
+	s := tempStore(t)
+	os.MkdirAll(s.Dir(), 0o700)
+	os.WriteFile(filepath.Join(s.Dir(), "ai.md"), []byte("- [ ] task\n"), 0o600)
+	if _, err := s.SaveNote("20260228-120000", "a note"); err != nil {
+		t.Fatalf("SaveNote: %v", err)
+	}
+
+	notes, err := s.ListNotes()
+	if err != nil {
+		t.Fatalf("ListNotes: %v", err)
+	}
+	if len(notes) != 1 {
+		t.Fatalf("got %d notes, want 1 (ai.md should be excluded)", len(notes))
+	}
+}
+
 func TestAutoExcludeNoGitDir(t *testing.T) {
 	// No .git/ directory — should silently skip without error
 	s := tempStore(t)
 	if err := s.SaveTodos([]model.Todo{{Text: "test"}}); err != nil {
 		t.Fatalf("SaveTodos should not fail in non-git dir: %v", err)
+	}
+}
+
+func TestSaveAIRoundTrip(t *testing.T) {
+	s := tempStore(t)
+	want := []model.Todo{
+		{Text: "Open task"},
+		{Text: "Working on it", Status: model.StatusInProgress},
+		{Text: "Finished", Status: model.StatusDone},
+	}
+	if err := s.SaveAI(want); err != nil {
+		t.Fatalf("SaveAI: %v", err)
+	}
+	got, err := s.LoadAI()
+	if err != nil {
+		t.Fatalf("LoadAI: %v", err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d todos, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("todo[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSaveAICreatesDir(t *testing.T) {
+	s := tempStore(t)
+	if err := s.SaveAI([]model.Todo{{Text: "test"}}); err != nil {
+		t.Fatalf("SaveAI: %v", err)
+	}
+	if _, err := os.Stat(s.Dir()); err != nil {
+		t.Errorf("expected .wtpad/ to exist after SaveAI: %v", err)
 	}
 }

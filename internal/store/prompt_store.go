@@ -113,7 +113,7 @@ func (ps *PromptStore) SavePrompt(name string, body string) (string, error) {
 		return "", err
 	}
 
-	if err := atomicWriteFile(filepath.Join(ps.basePath, name+".md"), []byte(body), 0o600); err != nil {
+	if err := AtomicWriteFile(filepath.Join(ps.basePath, name+".md"), []byte(body), 0o600); err != nil {
 		return "", err
 	}
 	return name, nil

@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **AI tab**: read-only tab showing `.wtpad/ai.md` with live file watching
+- **`wtpad ai` CLI**: `add`, `start`, `done`, `ls`, `clear` for AI agent task tracking
+- **`wtpad ai install claude-code`**: set up Claude Code integration with cleanup-aware hooks
 - Help overlay (`?`) now supports scrolling with `↑/↓/j/k/PgUp/PgDn` for small terminals
 
 ### Changed

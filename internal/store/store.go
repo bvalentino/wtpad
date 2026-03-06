@@ -15,6 +15,7 @@ import (
 
 const (
 	todosFile   = "todos.md"
+	aiFile      = "ai.md"
 	titleFile   = "title.txt"
 	noteTimeFmt = "20060102-150405"
 )
@@ -37,9 +38,9 @@ func (s *Store) Dir() string {
 	return s.basePath
 }
 
-// ensureDir creates the .wtpad/ directory if it doesn't exist.
+// EnsureDir creates the .wtpad/ directory if it doesn't exist.
 // On first creation, it adds .wtpad/ to .git/info/exclude.
-func (s *Store) ensureDir() error {
+func (s *Store) EnsureDir() error {
 	_, statErr := os.Stat(s.basePath)
 	created := os.IsNotExist(statErr)
 
@@ -110,10 +111,10 @@ func (s *Store) validNoteName(name string) error {
 	return nil
 }
 
-// LoadTodos reads todos.md and parses GFM task list lines.
+// loadTodoFile reads a GFM task list file and returns parsed todos.
 // Returns an empty slice if the file does not exist.
-func (s *Store) LoadTodos() ([]model.Todo, error) {
-	path := filepath.Join(s.basePath, todosFile)
+func (s *Store) loadTodoFile(filename string) ([]model.Todo, error) {
+	path := filepath.Join(s.basePath, filename)
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return []model.Todo{}, nil
@@ -137,6 +138,11 @@ func (s *Store) LoadTodos() ([]model.Todo, error) {
 	return todos, nil
 }
 
+// LoadTodos reads todos.md and parses GFM task list lines.
+func (s *Store) LoadTodos() ([]model.Todo, error) {
+	return s.loadTodoFile(todosFile)
+}
+
 // parseTodoLine parses a single GFM task list line.
 func parseTodoLine(line string) (model.Todo, bool) {
 	line = strings.TrimSpace(line)
@@ -152,25 +158,49 @@ func parseTodoLine(line string) (model.Todo, bool) {
 	}
 }
 
-// SaveTodos writes todos as a GFM task list to todos.md atomically.
-func (s *Store) SaveTodos(todos []model.Todo) error {
-	if err := s.ensureDir(); err != nil {
+// saveTodoFile writes todos as a GFM task list to the given file atomically.
+func (s *Store) saveTodoFile(filename string, todos []model.Todo) error {
+	if err := s.EnsureDir(); err != nil {
 		return err
 	}
-
 	var buf strings.Builder
 	for _, t := range todos {
-		switch t.Status {
-		case model.StatusDone:
-			fmt.Fprintf(&buf, "- [x] %s\n", t.Text)
-		case model.StatusInProgress:
-			fmt.Fprintf(&buf, "- [~] %s\n", t.Text)
-		default:
-			fmt.Fprintf(&buf, "- [ ] %s\n", t.Text)
-		}
+		buf.WriteString(t.GFMLine())
+		buf.WriteByte('\n')
 	}
+	return s.atomicWrite(filename, buf.String())
+}
 
-	return s.atomicWrite(todosFile, buf.String())
+// SaveTodos writes todos as a GFM task list to todos.md atomically.
+func (s *Store) SaveTodos(todos []model.Todo) error {
+	return s.saveTodoFile(todosFile, todos)
+}
+
+// LoadAI reads ai.md and parses GFM task list lines.
+func (s *Store) LoadAI() ([]model.Todo, error) {
+	return s.loadTodoFile(aiFile)
+}
+
+// ClearAI removes the ai.md file. Returns nil if the file does not exist.
+func (s *Store) ClearAI() error {
+	path := filepath.Join(s.basePath, aiFile)
+	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
+// AIExists reports whether ai.md exists on disk.
+func (s *Store) AIExists() bool {
+	path := filepath.Join(s.basePath, aiFile)
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// SaveAI writes AI todos as a GFM task list to ai.md atomically.
+func (s *Store) SaveAI(todos []model.Todo) error {
+	return s.saveTodoFile(aiFile, todos)
 }
 
 // LoadTitle reads the title from title.txt.
@@ -197,7 +227,7 @@ func (s *Store) SaveTitle(title string) error {
 		}
 		return err
 	}
-	if err := s.ensureDir(); err != nil {
+	if err := s.EnsureDir(); err != nil {
 		return err
 	}
 	return s.atomicWrite(titleFile, title)
@@ -215,7 +245,7 @@ func (s *Store) ListNotes() ([]model.Note, error) {
 	var notes []model.Note
 	for _, path := range entries {
 		base := filepath.Base(path)
-		if base == todosFile {
+		if base == todosFile || base == aiFile {
 			continue
 		}
 		name := strings.TrimSuffix(base, ".md")
@@ -259,7 +289,7 @@ func (s *Store) LoadNote(name string) (*model.Note, error) {
 // SaveNote writes a note atomically. If name is empty, generates a timestamp name.
 // Returns the name used.
 func (s *Store) SaveNote(name string, body string) (string, error) {
-	if err := s.ensureDir(); err != nil {
+	if err := s.EnsureDir(); err != nil {
 		return "", err
 	}
 
@@ -301,11 +331,11 @@ func (s *Store) DeleteNote(name string) error {
 
 // atomicWrite writes data to a .tmp file then renames it into place.
 func (s *Store) atomicWrite(filename, data string) error {
-	return atomicWriteFile(filepath.Join(s.basePath, filename), []byte(data), 0o600)
+	return AtomicWriteFile(filepath.Join(s.basePath, filename), []byte(data), 0o600)
 }
 
-// atomicWriteFile writes data to path via a temporary file and atomic rename.
-func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+// AtomicWriteFile writes data to path via a temporary file and atomic rename.
+func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
