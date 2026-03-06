@@ -12,10 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`wtpad ai` CLI**: `add`, `start`, `done`, `ls`, `clear` for AI agent task tracking
 - **`wtpad ai install claude-code`**: set up Claude Code integration with cleanup-aware hooks
 - Help overlay (`?`) now supports scrolling with `↑/↓/j/k/PgUp/PgDn` for small terminals
+- **Terminal tab title**: set the terminal tab/window title (OSC 2) to match the wtpad title, with "wtpad" as fallback
 
 ### Changed
 
 - Centered empty states for all tabs with description and hint text
+- Title length limit removed — titles can now be any length
+- Title box line width increased from 26 to 35 characters; long titles truncate with ellipsis on the 3rd line
 
 ## [0.1.4] - 2026-03-04
 

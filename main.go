@@ -189,9 +189,6 @@ func cmdTitle(s *store.Store, args []string) {
 	}
 
 	title := strings.Join(args, " ")
-	if runes := []rune(title); len(runes) > 40 {
-		fatal("Error: title too long (max 40 characters)")
-	}
 	if err := s.SaveTitle(title); err != nil {
 		fatal("Error: %v", err)
 	}
@@ -366,9 +363,6 @@ func cmdAITitle(s *store.Store, args []string) {
 		fmt.Printf("Title already set: %s\n", existing)
 		return
 	}
-	if runes := []rune(text); len(runes) > 40 {
-		fatal("Error: title too long (max 40 characters)")
-	}
 	if err := s.SaveTitle(text); err != nil {
 		fatal("Error: %v", err)
 	}
@@ -383,7 +377,7 @@ Run these commands via the Bash tool:
 - To queue a task for later: wtpad ai add "short task description"
 - When it's clear what the session is about: wtpad ai title "short title"
 
-The title is only set if the user hasn't already set one. Max 40 characters.
+The title is only set if the user hasn't already set one.
 Keep all descriptions short — they display in a narrow terminal pane.`
 
 func cmdAIPrompt(s *store.Store) {
