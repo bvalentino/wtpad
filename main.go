@@ -273,6 +273,8 @@ func cmdAI(s *store.Store, args []string) {
 		cmdAITitle(s, args[1:])
 	case "install":
 		cmdAIInstall(args[1:])
+	case "uninstall":
+		cmdAIUninstall(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown ai command: %s\n\n", args[0])
 		printAIUsage()
@@ -408,6 +410,37 @@ func cmdAIInstall(args []string) {
 	}
 }
 
+func cmdAIUninstall(args []string) {
+	if len(args) == 0 {
+		fatal("Usage: wtpad ai uninstall claude-code")
+	}
+	switch args[0] {
+	case "claude-code":
+		uninstallClaudeCode()
+	default:
+		fatal("Unknown integration: %s\n\nSupported integrations: claude-code", args[0])
+	}
+}
+
+func uninstallClaudeCode() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fatal("Error finding home directory: %v", err)
+	}
+	claudeDir := filepath.Join(home, ".claude")
+
+	removed, err := removeSettingsHook(claudeDir)
+	if err != nil {
+		fatal("Error updating ~/.claude/settings.json: %v", err)
+	}
+	if !removed {
+		fmt.Println("No wtpad hook found in ~/.claude/settings.json")
+		return
+	}
+	fmt.Println("Claude Code integration removed:")
+	fmt.Println("  ~/.claude/settings.json  — SessionStart hook removed")
+}
+
 func installClaudeCode() {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -527,6 +560,86 @@ func mergeSettingsHook(claudeDir string) error {
 	return store.AtomicWriteFile(path, buf.Bytes(), 0o644)
 }
 
+func removeSettingsHook(claudeDir string) (bool, error) {
+	path := filepath.Join(claudeDir, "settings.json")
+
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return false, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	hooks, _ := settings["hooks"].(map[string]any)
+	if hooks == nil {
+		return false, nil
+	}
+
+	sessionStart, _ := hooks["SessionStart"].([]any)
+	if sessionStart == nil {
+		return false, nil
+	}
+
+	filtered := make([]any, 0, len(sessionStart))
+	for _, entry := range sessionStart {
+		em, ok := entry.(map[string]any)
+		if !ok {
+			filtered = append(filtered, entry)
+			continue
+		}
+
+		// Old flat format
+		if cmd, ok := em["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
+			continue
+		}
+
+		// New nested format
+		isWtpad := false
+		hooksArr, _ := em["hooks"].([]any)
+		for _, h := range hooksArr {
+			if hm, ok := h.(map[string]any); ok {
+				if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
+					isWtpad = true
+					break
+				}
+			}
+		}
+		if isWtpad {
+			continue
+		}
+
+		filtered = append(filtered, entry)
+	}
+
+	if len(filtered) == len(sessionStart) {
+		return false, nil
+	}
+
+	if len(filtered) == 0 {
+		delete(hooks, "SessionStart")
+	} else {
+		hooks["SessionStart"] = filtered
+	}
+	if len(hooks) == 0 {
+		delete(settings, "hooks")
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(settings); err != nil {
+		return false, err
+	}
+	return true, store.AtomicWriteFile(path, buf.Bytes(), 0o644)
+}
+
 func printAIUsage() {
 	fmt.Fprintln(os.Stderr, `Usage: wtpad ai <command>
 
@@ -538,7 +651,8 @@ Commands:
   clear                   Remove all AI tasks
   title <text>            Set title (no-op if already set)
   prompt                  Print AI instructions and current tasks
-  install claude-code     Set up Claude Code integration`)
+  install claude-code     Set up Claude Code integration
+  uninstall claude-code   Remove Claude Code integration`)
 }
 
 func printUsage() {

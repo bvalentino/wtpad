@@ -182,6 +182,115 @@ func TestMergeSettingsHook_NoHTMLEscaping(t *testing.T) {
 	}
 }
 
+// --- removeSettingsHook tests ---
+
+func TestRemoveSettingsHook_RemovesWtpadHook(t *testing.T) {
+	dir := t.TempDir()
+	// Install first
+	if err := mergeSettingsHook(dir); err != nil {
+		t.Fatalf("mergeSettingsHook: %v", err)
+	}
+
+	removed, err := removeSettingsHook(dir)
+	if err != nil {
+		t.Fatalf("removeSettingsHook: %v", err)
+	}
+	if !removed {
+		t.Error("expected hook to be removed")
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
+	var settings map[string]any
+	json.Unmarshal(data, &settings)
+
+	if extractHookCommand(t, settings) != "" {
+		t.Error("wtpad hook still present after removal")
+	}
+}
+
+func TestRemoveSettingsHook_PreservesOtherHooks(t *testing.T) {
+	dir := t.TempDir()
+	existing := `{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {"type": "command", "command": "echo hello"}
+        ]
+      }
+    ]
+  }
+}`
+	os.WriteFile(filepath.Join(dir, "settings.json"), []byte(existing), 0o644)
+
+	// Install wtpad hook alongside existing
+	if err := mergeSettingsHook(dir); err != nil {
+		t.Fatalf("mergeSettingsHook: %v", err)
+	}
+
+	// Remove wtpad hook
+	removed, err := removeSettingsHook(dir)
+	if err != nil {
+		t.Fatalf("removeSettingsHook: %v", err)
+	}
+	if !removed {
+		t.Error("expected hook to be removed")
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
+	var settings map[string]any
+	json.Unmarshal(data, &settings)
+
+	hooks := settings["hooks"].(map[string]any)
+	sessionStart := hooks["SessionStart"].([]any)
+	if len(sessionStart) != 1 {
+		t.Errorf("expected 1 remaining SessionStart entry, got %d", len(sessionStart))
+	}
+}
+
+func TestRemoveSettingsHook_NoHookPresent(t *testing.T) {
+	dir := t.TempDir()
+	existing := `{"allowedTools": ["Read"]}`
+	os.WriteFile(filepath.Join(dir, "settings.json"), []byte(existing), 0o644)
+
+	removed, err := removeSettingsHook(dir)
+	if err != nil {
+		t.Fatalf("removeSettingsHook: %v", err)
+	}
+	if removed {
+		t.Error("expected no hook to be removed")
+	}
+}
+
+func TestRemoveSettingsHook_NoFile(t *testing.T) {
+	dir := t.TempDir()
+	removed, err := removeSettingsHook(dir)
+	if err != nil {
+		t.Fatalf("removeSettingsHook: %v", err)
+	}
+	if removed {
+		t.Error("expected no hook to be removed when file doesn't exist")
+	}
+}
+
+func TestRemoveSettingsHook_CleansEmptyHooksKey(t *testing.T) {
+	dir := t.TempDir()
+	// Install only wtpad hook
+	if err := mergeSettingsHook(dir); err != nil {
+		t.Fatalf("mergeSettingsHook: %v", err)
+	}
+
+	removeSettingsHook(dir)
+
+	data, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
+	var settings map[string]any
+	json.Unmarshal(data, &settings)
+
+	if _, exists := settings["hooks"]; exists {
+		t.Error("expected empty hooks key to be removed")
+	}
+}
+
 // extractHookCommand finds the wtpad hook command in the settings structure.
 func extractHookCommand(t *testing.T, settings map[string]any) string {
 	t.Helper()
