@@ -4,6 +4,13 @@ All notable changes to wtpad will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **`wtpad ai start`**: transitions an existing open task to in-progress instead of always creating a new one
+- **`wtpad ai install claude-code`**: installs UserPromptSubmit and Stop hooks for better task tracking reminders
+
 ## [0.1.5] - 2026-03-06
 
 ### Added
