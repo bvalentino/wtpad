@@ -49,7 +49,9 @@ func (m importerModel) resize(w, h int) importerModel {
 func (m importerModel) Update(msg tea.Msg) (importerModel, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
-		return m, nil
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
 	}
 
 	switch keyMsg.String() {
@@ -59,7 +61,7 @@ func (m importerModel) Update(msg tea.Msg) (importerModel, tea.Cmd) {
 			return m, nil
 		}
 		path = expandTilde(path)
-		path = strings.TrimRight(path, ".")
+		path = strings.TrimSuffix(path, ".")
 		if filepath.Ext(path) != ".md" {
 			m.errMsg = "Only .md files can be imported"
 			return m, nil
