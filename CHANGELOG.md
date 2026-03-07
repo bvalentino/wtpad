@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Import note from file**: press `i` in the Notes tab to import a `.md` file by path
+
 ### Changed
 
 - **`wtpad ai start`**: transitions an existing open task to in-progress instead of always creating a new one
