@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/bvalentino/wtpad/internal/model"
 	"github.com/bvalentino/wtpad/internal/store"
@@ -192,9 +191,9 @@ func (m templateModal) View() string {
 	var b strings.Builder
 
 	if m.saving {
-		b.WriteString(templateHeader.Render("Save as Template"))
+		b.WriteString(modalHeader.Render("Save as Template"))
 	} else {
-		b.WriteString(templateHeader.Render("Import Template"))
+		b.WriteString(modalHeader.Render("Import Template"))
 	}
 	b.WriteString("\n\n")
 
@@ -223,24 +222,5 @@ func (m templateModal) View() string {
 		b.WriteString(listConfirm.Render(fmt.Sprintf("Template %q already exists. Overwrite? (y/n)", name)))
 	}
 
-	content := b.String()
-
-	contentWidth := lipgloss.Width(content)
-	contentHeight := strings.Count(content, "\n") + 1
-
-	padLeft := 0
-	if m.width > contentWidth {
-		padLeft = (m.width - contentWidth) / 2
-	}
-	padTop := 0
-	if m.height > contentHeight {
-		padTop = (m.height - contentHeight) / 2
-	}
-
-	return lipgloss.NewStyle().
-		PaddingLeft(padLeft).
-		PaddingTop(padTop).
-		Width(m.width).
-		Height(m.height).
-		Render(content)
+	return renderCenteredContent(b.String(), m.width, m.height)
 }

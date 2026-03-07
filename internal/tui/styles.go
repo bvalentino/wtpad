@@ -200,8 +200,8 @@ var (
 	dividerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
 
-	// Template modal styles
-	templateHeader = lipgloss.NewStyle().
+	// Modal styles (used by template and import modals)
+	modalHeader = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("62"))
 
@@ -214,4 +214,27 @@ var (
 func renderEmptyState(width, height int, lines []string) string {
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center,
 		strings.Join(lines, "\n"))
+}
+
+// renderCenteredContent renders content centered within the given dimensions.
+// Used by modals that don't use the bordered overlay box (template, import).
+func renderCenteredContent(content string, width, height int) string {
+	contentWidth := lipgloss.Width(content)
+	contentHeight := strings.Count(content, "\n") + 1
+
+	padLeft := 0
+	if width > contentWidth {
+		padLeft = (width - contentWidth) / 2
+	}
+	padTop := 0
+	if height > contentHeight {
+		padTop = (height - contentHeight) / 2
+	}
+
+	return lipgloss.NewStyle().
+		PaddingLeft(padLeft).
+		PaddingTop(padTop).
+		Width(width).
+		Height(height).
+		Render(content)
 }

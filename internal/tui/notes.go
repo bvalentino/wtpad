@@ -60,6 +60,10 @@ func (m notesModel) Update(msg tea.Msg) (notesModel, tea.Cmd) {
 		return m, cmd
 	}
 
+	if keyMsg.String() == "i" {
+		return m, func() tea.Msg { return enterImportMsg{} }
+	}
+
 	return m, nil
 }
 
