@@ -31,6 +31,7 @@ const (
 	modeViewer
 	modeHelp
 	modeTemplate
+	modeImport
 	modeTitleInput
 )
 
@@ -83,6 +84,7 @@ type App struct {
 	viewerPane   viewerModel
 	helpPane     helpModel
 	templatePane templateModal
+	importerPane importerModel
 
 	promptStore *store.PromptStore
 }
@@ -124,6 +126,7 @@ func New(cfg AppConfig) App {
 		aiPane:       newAI(cfg.AITodos, cfg.Store),
 		editorPane:   newEditorModel(),
 		templatePane: newTemplateModal(cfg.TemplateStore),
+		importerPane: newImporterModel(),
 	}
 }
 
@@ -231,6 +234,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case exitTemplateMsg:
 		a.mode = modeNormal
 		return a, nil
+	case enterImportMsg:
+		a.importerPane = a.importerPane.open(a.width, a.height)
+		a.mode = modeImport
+		return a, textinput.Blink
+	case importFileMsg:
+		m := msg.(importFileMsg)
+		name, err := a.store.SaveNote("", m.body)
+		if err != nil {
+			log.Printf("wtpad: failed to save imported note: %v", err)
+			a.mode = modeNormal
+			return a, nil
+		}
+		if notes, err := a.store.ListNotes(); err != nil {
+			log.Printf("wtpad: failed to list notes after import: %v", err)
+		} else {
+			a.notesPane = a.notesPane.SetNotes(notes)
+		}
+		a.viewerPane = a.viewerPane.openViewer(name, m.body, a.width, a.height)
+		a.mode = modeViewer
+		return a, nil
+	case exitImportMsg:
+		a.mode = modeNormal
+		return a, nil
 	}
 
 	switch msg := msg.(type) {
@@ -243,6 +269,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.viewerPane = a.viewerPane.resize(msg.Width, msg.Height)
 		a.helpPane = a.helpPane.resize(msg.Width, msg.Height)
 		a.templatePane = a.templatePane.resize(msg.Width, msg.Height)
+		a.importerPane = a.importerPane.resize(msg.Width, msg.Height)
 		return a, nil
 
 	case tea.KeyMsg:
@@ -320,6 +347,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// Delegate to import modal when in import mode
+	if a.mode == modeImport {
+		var cmd tea.Cmd
+		a.importerPane, cmd = a.importerPane.Update(msg)
+		return a, cmd
+	}
+
 	// Delegate to template modal when in template mode
 	if a.mode == modeTemplate {
 		var cmd tea.Cmd
@@ -362,6 +396,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) View() string {
 	if a.mode == modeHelp {
 		return a.helpPane.View()
+	}
+	if a.mode == modeImport {
+		return a.importerPane.View()
 	}
 	if a.mode == modeTemplate {
 		return a.templatePane.View()
@@ -705,6 +742,8 @@ func (a App) renderFooter() string {
 	switch a.mode {
 	case modeHelp:
 		return footerStyle.Render(a.helpPane.FooterHint())
+	case modeImport:
+		return footerStyle.Render(a.importerPane.FooterHint())
 	case modeEditor:
 		return footerStyle.Render(a.editorPane.FooterHint())
 	case modeViewer:

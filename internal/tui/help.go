@@ -118,6 +118,7 @@ func (h helpModel) buildLines() []string {
 		}},
 		{"Notes", []struct{ key, desc string }{
 			{"a", "New note"},
+			{"i", "Import from file"},
 			{"Enter", "View selected"},
 			{"e", "Edit selected"},
 			{"Delete", "Delete selected"},

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -758,6 +759,113 @@ func TestTitleCompactHeader(t *testing.T) {
 	out := app.View()
 	if !strings.Contains(out, "My Project") {
 		t.Error("title should appear in compact header mode too")
+	}
+}
+
+func switchToNotesTab(t *testing.T, app App) App {
+	t.Helper()
+	updated, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	app = updated.(App)
+	if app.activeTab != tabNotes {
+		t.Fatal("expected to be on Notes tab")
+	}
+	return app
+}
+
+func TestImportKeyOpensModal(t *testing.T) {
+	app := testApp(t, nil)
+	app = sendResize(t, app, 80, 40)
+	app = switchToNotesTab(t, app)
+
+	// Press 'i' to open import modal
+	updated, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	app = updated.(App)
+	if cmd == nil {
+		t.Fatal("'i' should produce a command")
+	}
+
+	// Process the enterImportMsg
+	updated, _ = app.Update(cmd())
+	app = updated.(App)
+
+	if app.mode != modeImport {
+		t.Fatalf("expected modeImport, got %d", app.mode)
+	}
+
+	out := app.View()
+	if !strings.Contains(out, "Import Note") {
+		t.Error("import modal should show 'Import Note' title")
+	}
+}
+
+func TestImportFullFlow(t *testing.T) {
+	s := tempStore(t)
+	app := New(AppConfig{
+		Store:         s,
+		TemplateStore: tempTemplateStoreForApp(t),
+		PromptStore:   tempPromptStoreForApp(t),
+		Branch:        "main",
+	})
+	app = sendResize(t, app, 80, 40)
+
+	// Create a file to import
+	dir := t.TempDir()
+	path := filepath.Join(dir, "import-me.md")
+	if err := os.WriteFile(path, []byte("# Imported\ncontent here"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Enter import mode
+	updated, _ := app.Update(enterImportMsg{})
+	app = updated.(App)
+	if app.mode != modeImport {
+		t.Fatalf("expected modeImport, got %d", app.mode)
+	}
+
+	// Send importFileMsg directly (simulates successful file read)
+	updated, _ = app.Update(importFileMsg{body: "# Imported\ncontent here"})
+	app = updated.(App)
+
+	if app.mode != modeViewer {
+		t.Errorf("expected modeViewer after import, got %d", app.mode)
+	}
+
+	// Verify note was saved to disk
+	notes, err := s.ListNotes()
+	if err != nil {
+		t.Fatalf("ListNotes: %v", err)
+	}
+	if len(notes) != 1 {
+		t.Fatalf("expected 1 note, got %d", len(notes))
+	}
+}
+
+func TestImportEscReturnsToNormal(t *testing.T) {
+	app := testApp(t, nil)
+	app = sendResize(t, app, 80, 40)
+
+	updated, _ := app.Update(enterImportMsg{})
+	app = updated.(App)
+
+	updated, _ = app.Update(exitImportMsg{})
+	app = updated.(App)
+
+	if app.mode != modeNormal {
+		t.Errorf("expected modeNormal after esc, got %d", app.mode)
+	}
+}
+
+func TestImportResizeUpdatesModal(t *testing.T) {
+	app := testApp(t, nil)
+	app = sendResize(t, app, 80, 40)
+
+	updated, _ := app.Update(enterImportMsg{})
+	app = updated.(App)
+
+	app = sendResize(t, app, 120, 50)
+
+	if app.importerPane.width != 120 || app.importerPane.height != 50 {
+		t.Errorf("importer dimensions = %dx%d, want 120x50", app.importerPane.width, app.importerPane.height)
 	}
 }
 
