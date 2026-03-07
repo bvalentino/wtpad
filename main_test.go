@@ -43,6 +43,63 @@ func TestHasInProgress_WithInProgress(t *testing.T) {
 	}
 }
 
+// --- cmdAIStart tests ---
+
+func TestAIStart_TransitionsExistingOpenTask(t *testing.T) {
+	s := newTestStore(t)
+	s.SaveAI([]model.Todo{{Text: "my task", Status: model.StatusOpen}})
+	captureStdout(t, func() { cmdAIStart(s, []string{"my task"}) })
+	todos, _ := s.LoadAI()
+	if len(todos) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(todos))
+	}
+	if todos[0].Status != model.StatusInProgress {
+		t.Errorf("expected StatusInProgress, got %v", todos[0].Status)
+	}
+}
+
+func TestAIStart_TransitionIsCaseInsensitive(t *testing.T) {
+	s := newTestStore(t)
+	s.SaveAI([]model.Todo{{Text: "My Task", Status: model.StatusOpen}})
+	captureStdout(t, func() { cmdAIStart(s, []string{"my", "task"}) })
+	todos, _ := s.LoadAI()
+	if len(todos) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(todos))
+	}
+	if todos[0].Status != model.StatusInProgress {
+		t.Errorf("expected StatusInProgress, got %v", todos[0].Status)
+	}
+}
+
+func TestAIStart_CreatesNewWhenNoMatch(t *testing.T) {
+	s := newTestStore(t)
+	s.SaveAI([]model.Todo{{Text: "other task", Status: model.StatusOpen}})
+	captureStdout(t, func() { cmdAIStart(s, []string{"new task"}) })
+	todos, _ := s.LoadAI()
+	if len(todos) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(todos))
+	}
+	if todos[1].Text != "new task" || todos[1].Status != model.StatusInProgress {
+		t.Errorf("expected new in-progress task, got %+v", todos[1])
+	}
+}
+
+func TestAIStart_DoesNotTransitionDoneTask(t *testing.T) {
+	s := newTestStore(t)
+	s.SaveAI([]model.Todo{{Text: "done task", Status: model.StatusDone}})
+	captureStdout(t, func() { cmdAIStart(s, []string{"done task"}) })
+	todos, _ := s.LoadAI()
+	if len(todos) != 2 {
+		t.Fatalf("expected 2 tasks (done + new), got %d", len(todos))
+	}
+	if todos[0].Status != model.StatusDone {
+		t.Error("original done task should remain done")
+	}
+	if todos[1].Status != model.StatusInProgress {
+		t.Error("new task should be in-progress")
+	}
+}
+
 // --- remind-start / remind-done tests ---
 
 func newTestStore(t *testing.T) *store.Store {
@@ -57,6 +114,9 @@ func newTestStore(t *testing.T) *store.Store {
 func TestRemindStart_PrintsWhenNoTasks(t *testing.T) {
 	s := newTestStore(t)
 	out := captureStdout(t, func() { cmdAIRemindStart(s) })
+	if !strings.Contains(out, "wtpad ai add") {
+		t.Errorf("expected add reminder, got: %q", out)
+	}
 	if !strings.Contains(out, "wtpad ai start") {
 		t.Errorf("expected start reminder, got: %q", out)
 	}

@@ -288,7 +288,30 @@ func cmdAIAdd(s *store.Store, args []string) {
 }
 
 func cmdAIStart(s *store.Store, args []string) {
-	aiAppendTask(s, args, model.StatusInProgress, "start", "Started")
+	text := strings.Join(args, " ")
+	if text == "" {
+		fatal("Usage: wtpad ai start <text>")
+	}
+	todos, err := s.LoadAI()
+	if err != nil {
+		fatal("Error: %v", err)
+	}
+	// Transition an existing open task if one matches.
+	found := false
+	for i, t := range todos {
+		if t.Status == model.StatusOpen && strings.EqualFold(t.Text, text) {
+			todos[i].Status = model.StatusInProgress
+			found = true
+			break
+		}
+	}
+	if !found {
+		todos = append(todos, model.Todo{Text: text, Status: model.StatusInProgress})
+	}
+	if err := s.SaveAI(todos); err != nil {
+		fatal("Error: %v", err)
+	}
+	fmt.Printf("Started: %s\n", text)
 }
 
 func aiAppendTask(s *store.Store, args []string, status model.TodoStatus, cmd, verb string) {
@@ -376,11 +399,12 @@ func cmdAITitle(s *store.Store, args []string) {
 const promptText = `You MUST use wtpad to track your work so the user can see progress in real time.
 
 Run these commands via the Bash tool:
-- Before starting work: wtpad ai start "short task description"
+- Plan tasks first: wtpad ai add "short task description"
+- Begin work on a task: wtpad ai start "short task description"
 - After completing work: wtpad ai done "short task description"
-- To queue a task for later: wtpad ai add "short task description"
 - When it's clear what the session is about: wtpad ai title "short title"
 
+start transitions an existing open task to in-progress, or creates one if no match.
 The title is only set if the user hasn't already set one.
 Keep all descriptions short — they display in a narrow terminal pane.`
 
@@ -413,7 +437,7 @@ func cmdAIRemindStart(s *store.Store) {
 	if hasInProgress(todos) {
 		return // already tracking — no reminder needed
 	}
-	fmt.Println("If you haven't run `wtpad ai start \"description\"` yet this session, do it now before any other work.")
+	fmt.Println("Plan tasks with `wtpad ai add \"description\"`, then begin work with `wtpad ai start \"description\"`.")
 	if len(todos) == 0 {
 		title, err := s.LoadTitle()
 		if err == nil && title == "" {
