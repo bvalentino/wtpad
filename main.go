@@ -268,6 +268,10 @@ func cmdAI(s *store.Store, args []string) {
 		cmdAIPrompt(s)
 	case "title":
 		cmdAITitle(s, args[1:])
+	case "remind-start":
+		cmdAIRemindStart(s)
+	case "remind-done":
+		cmdAIRemindDone(s)
 	case "install":
 		cmdAIInstall(args[1:])
 	case "uninstall":
@@ -284,7 +288,30 @@ func cmdAIAdd(s *store.Store, args []string) {
 }
 
 func cmdAIStart(s *store.Store, args []string) {
-	aiAppendTask(s, args, model.StatusInProgress, "start", "Started")
+	text := strings.Join(args, " ")
+	if text == "" {
+		fatal("Usage: wtpad ai start <text>")
+	}
+	todos, err := s.LoadAI()
+	if err != nil {
+		fatal("Error: %v", err)
+	}
+	// Transition an existing open task if one matches.
+	found := false
+	for i, t := range todos {
+		if t.Status == model.StatusOpen && strings.EqualFold(t.Text, text) {
+			todos[i].Status = model.StatusInProgress
+			found = true
+			break
+		}
+	}
+	if !found {
+		todos = append(todos, model.Todo{Text: text, Status: model.StatusInProgress})
+	}
+	if err := s.SaveAI(todos); err != nil {
+		fatal("Error: %v", err)
+	}
+	fmt.Printf("Started: %s\n", text)
 }
 
 func aiAppendTask(s *store.Store, args []string, status model.TodoStatus, cmd, verb string) {
@@ -372,11 +399,12 @@ func cmdAITitle(s *store.Store, args []string) {
 const promptText = `You MUST use wtpad to track your work so the user can see progress in real time.
 
 Run these commands via the Bash tool:
-- Before starting work: wtpad ai start "short task description"
+- Plan tasks first: wtpad ai add "short task description"
+- Begin work on a task: wtpad ai start "short task description"
 - After completing work: wtpad ai done "short task description"
-- To queue a task for later: wtpad ai add "short task description"
 - When it's clear what the session is about: wtpad ai title "short title"
 
+start transitions an existing open task to in-progress, or creates one if no match.
 The title is only set if the user hasn't already set one.
 Keep all descriptions short — they display in a narrow terminal pane.`
 
@@ -389,6 +417,42 @@ func cmdAIPrompt(s *store.Store) {
 	fmt.Println("\nCurrent AI tasks:")
 	for _, t := range todos {
 		fmt.Println(t.GFMLine())
+	}
+}
+
+func hasInProgress(todos []model.Todo) bool {
+	for _, t := range todos {
+		if t.Status == model.StatusInProgress {
+			return true
+		}
+	}
+	return false
+}
+
+func cmdAIRemindStart(s *store.Store) {
+	todos, err := s.LoadAI()
+	if err != nil {
+		return // silent, never block the hook
+	}
+	if hasInProgress(todos) {
+		return // already tracking — no reminder needed
+	}
+	fmt.Println("Plan tasks with `wtpad ai add \"description\"`, then begin work with `wtpad ai start \"description\"`.")
+	if len(todos) == 0 {
+		title, err := s.LoadTitle()
+		if err == nil && title == "" {
+			fmt.Println("Also set the session title with `wtpad ai title \"short title\"` if it's clear what this session is about.")
+		}
+	}
+}
+
+func cmdAIRemindDone(s *store.Store) {
+	todos, err := s.LoadAI()
+	if err != nil {
+		return // silent, never block the hook
+	}
+	if hasInProgress(todos) {
+		fmt.Println("If you completed work this turn, run `wtpad ai done \"description\"` for each finished task.")
 	}
 }
 
@@ -428,11 +492,11 @@ func uninstallClaudeCode() {
 		fatal("Error updating ~/.claude/settings.json: %v", err)
 	}
 	if !removed {
-		fmt.Println("No wtpad hook found in ~/.claude/settings.json")
+		fmt.Println("No wtpad hooks found in ~/.claude/settings.json")
 		return
 	}
 	fmt.Println("Claude Code integration removed:")
-	fmt.Println("  ~/.claude/settings.json  — SessionStart hook removed")
+	fmt.Println("  ~/.claude/settings.json  — hooks removed")
 }
 
 func installClaudeCode() {
@@ -451,12 +515,43 @@ func installClaudeCode() {
 	}
 
 	fmt.Println("Claude Code integration installed:")
-	fmt.Println("  ~/.claude/settings.json  — SessionStart hook (wtpad ai prompt)")
+	fmt.Println("  ~/.claude/settings.json  — hooks added (SessionStart, UserPromptSubmit, Stop)")
+}
+
+// wtpadHookDef describes a single hook entry to install into settings.json.
+type wtpadHookDef struct {
+	event   string // e.g. "SessionStart", "UserPromptSubmit", "Stop"
+	subcmd  string // e.g. "prompt", "remind-start", "remind-done"
+}
+
+func wtpadHookDefs() []wtpadHookDef {
+	return []wtpadHookDef{
+		{"SessionStart", "prompt"},
+		{"UserPromptSubmit", "remind-start"},
+		{"Stop", "remind-done"},
+	}
+}
+
+func hookCommand(subcmd string) string {
+	return fmt.Sprintf(
+		`command -v wtpad >/dev/null 2>&1 && wtpad ai %s 2>/dev/null || { echo "wtpad: command not found — remove this hook from ~/.claude/settings.json to clean up"; true; }`,
+		subcmd,
+	)
+}
+
+func writeSettingsJSON(path string, settings map[string]any) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(settings); err != nil {
+		return err
+	}
+	return store.AtomicWriteFile(path, buf.Bytes(), 0o644)
 }
 
 func mergeSettingsHook(claudeDir string) error {
 	path := filepath.Join(claudeDir, "settings.json")
-	hookCmd := `command -v wtpad >/dev/null 2>&1 && wtpad ai prompt 2>/dev/null || { echo "wtpad: command not found — remove this hook from ~/.claude/settings.json to clean up"; true; }`
 
 	var settings map[string]any
 	data, err := os.ReadFile(path)
@@ -479,79 +574,71 @@ func mergeSettingsHook(claudeDir string) error {
 		return fmt.Errorf("%s: \"hooks\" has unexpected type %T", path, v)
 	}
 
-	var sessionStart []any
-	switch v := hooks["SessionStart"].(type) {
+	for _, def := range wtpadHookDefs() {
+		hookCmd := hookCommand(def.subcmd)
+		if err := upsertHookEvent(hooks, def.event, hookCmd, path); err != nil {
+			return err
+		}
+	}
+
+	settings["hooks"] = hooks
+	return writeSettingsJSON(path, settings)
+}
+
+// isWtpadHookEntry returns true if the settings entry contains a wtpad hook command.
+func isWtpadHookEntry(em map[string]any) bool {
+	// Old flat format: {"type":"command","command":"wtpad ai ..."}
+	if cmd, ok := em["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
+		return true
+	}
+	// New nested format: {"hooks":[{"type":"command","command":"wtpad ai ..."}]}
+	hooksArr, _ := em["hooks"].([]any)
+	for _, h := range hooksArr {
+		if hm, ok := h.(map[string]any); ok {
+			if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// upsertHookEvent ensures exactly one wtpad hook entry exists for a given event.
+func upsertHookEvent(hooks map[string]any, event, hookCmd, path string) error {
+	var entries []any
+	switch v := hooks[event].(type) {
 	case []any:
-		sessionStart = v
+		entries = v
 	case nil:
 		// no existing hooks
 	default:
-		return fmt.Errorf("%s: \"hooks.SessionStart\" has unexpected type %T", path, v)
+		return fmt.Errorf("%s: \"hooks.%s\" has unexpected type %T", path, event, v)
 	}
 
 	// Look for an existing wtpad hook in both old (flat) and new (nested) formats.
-	found := false
-	for i, entry := range sessionStart {
+	for i, entry := range entries {
 		em, ok := entry.(map[string]any)
-		if !ok {
+		if !ok || !isWtpadHookEntry(em) {
 			continue
 		}
-
-		// Old flat format: {"type":"command","command":"wtpad ai ls ..."}
-		if cmd, ok := em["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
-			// Replace the flat entry with the new nested format
-			sessionStart[i] = map[string]any{
-				"hooks": []any{
-					map[string]any{
-						"type":    "command",
-						"command": hookCmd,
-					},
-				},
-			}
-			found = true
-			break
-		}
-
-		// New nested format: {"hooks":[{"type":"command","command":"wtpad ai ls ..."}]}
-		hooksArr, _ := em["hooks"].([]any)
-		for _, h := range hooksArr {
-			if hm, ok := h.(map[string]any); ok {
-				if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
-					if cmd == hookCmd {
-						return nil // already up to date
-					}
-					hm["command"] = hookCmd
-					found = true
-					break
-				}
-			}
-		}
-		if found {
-			break
-		}
-	}
-
-	if !found {
-		sessionStart = append(sessionStart, map[string]any{
+		// Replace with canonical nested format.
+		entries[i] = map[string]any{
 			"hooks": []any{
-				map[string]any{
-					"type":    "command",
-					"command": hookCmd,
-				},
+				map[string]any{"type": "command", "command": hookCmd},
 			},
-		})
-		hooks["SessionStart"] = sessionStart
-		settings["hooks"] = hooks
+		}
+		hooks[event] = entries
+		return nil
 	}
 
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(settings); err != nil {
-		return err
-	}
-	return store.AtomicWriteFile(path, buf.Bytes(), 0o644)
+	// No existing wtpad hook — append a new entry.
+	entries = append(entries, map[string]any{
+		"hooks": []any{
+			map[string]any{"type": "command", "command": hookCmd},
+		},
+	})
+	hooks[event] = entries
+	return nil
 }
 
 func removeSettingsHook(claudeDir string) (bool, error) {
@@ -575,63 +662,41 @@ func removeSettingsHook(claudeDir string) (bool, error) {
 		return false, nil
 	}
 
-	sessionStart, _ := hooks["SessionStart"].([]any)
-	if sessionStart == nil {
-		return false, nil
-	}
+	removedAny := false
+	for _, def := range wtpadHookDefs() {
+		entries, _ := hooks[def.event].([]any)
+		if entries == nil {
+			continue
+		}
 
-	filtered := make([]any, 0, len(sessionStart))
-	for _, entry := range sessionStart {
-		em, ok := entry.(map[string]any)
-		if !ok {
+		filtered := make([]any, 0, len(entries))
+		for _, entry := range entries {
+			em, ok := entry.(map[string]any)
+			if ok && isWtpadHookEntry(em) {
+				continue
+			}
 			filtered = append(filtered, entry)
-			continue
 		}
 
-		// Old flat format
-		if cmd, ok := em["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
-			continue
-		}
-
-		// New nested format
-		isWtpad := false
-		hooksArr, _ := em["hooks"].([]any)
-		for _, h := range hooksArr {
-			if hm, ok := h.(map[string]any); ok {
-				if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "wtpad ai") {
-					isWtpad = true
-					break
-				}
+		if len(filtered) < len(entries) {
+			removedAny = true
+			if len(filtered) == 0 {
+				delete(hooks, def.event)
+			} else {
+				hooks[def.event] = filtered
 			}
 		}
-		if isWtpad {
-			continue
-		}
-
-		filtered = append(filtered, entry)
 	}
 
-	if len(filtered) == len(sessionStart) {
+	if !removedAny {
 		return false, nil
 	}
 
-	if len(filtered) == 0 {
-		delete(hooks, "SessionStart")
-	} else {
-		hooks["SessionStart"] = filtered
-	}
 	if len(hooks) == 0 {
 		delete(settings, "hooks")
 	}
 
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(settings); err != nil {
-		return false, err
-	}
-	return true, store.AtomicWriteFile(path, buf.Bytes(), 0o644)
+	return true, writeSettingsJSON(path, settings)
 }
 
 func printAIUsage() {
@@ -645,6 +710,8 @@ Commands:
   clear                   Remove all AI tasks
   title <text>            Set title (no-op if already set)
   prompt                  Print AI instructions and current tasks
+  remind-start            Remind to start tracking (silent if already tracking)
+  remind-done             Remind to mark tasks done (silent if nothing in progress)
   install claude-code     Set up Claude Code integration
   uninstall claude-code   Remove Claude Code integration`)
 }
